@@ -23,6 +23,18 @@ IMAGE = (
 
 CurvePolicy = Literal["legacy", "curve_pure_v1", "curve_pure_v2"]
 
+# Exactly one policy may govern a curve-profile run.  v4 shipped with the training
+# feedback under `legacy` while final verification used `curve_pure_v1`; 28 of 192
+# trajectories then carried 561 `candidate_policy_rejected` observations, i.e. the
+# model was being told its work was rejected by a rule the grader did not apply.
+# Both sides now read this constant, so they cannot drift apart again.
+CURVE_POLICY: CurvePolicy = "curve_pure_v2"
+
+# Read-back gates accept either version: archived v4/GSPO evidence stays auditable
+# under the policy it was actually produced with, and rewriting it would destroy
+# the audit trail rather than fix it.
+ARCHIVED_CURVE_POLICIES: frozenset[str] = frozenset({"curve_pure_v1", "curve_pure_v2"})
+
 _POLICY_EXTRA_METHODS: dict[CurvePolicy, frozenset[str]] = {
     "legacy": frozenset(),
     "curve_pure_v1": frozenset({"issubset"}),

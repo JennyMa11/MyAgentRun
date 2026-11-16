@@ -10,6 +10,7 @@ from minidsh_rl.curve_cases import curve_cases
 from minidsh_rl.curve_cases_v2 import curve_cases_v2
 from minidsh_rl.feedback_coverage import CoverageRow
 from minidsh_rl.learning_gates import audit
+from minidsh_rl.minirepo_verification import ARCHIVED_CURVE_POLICIES, CURVE_POLICY
 
 DECLARED_CHECKS = 420
 DECLARED_CASES = 30
@@ -37,7 +38,7 @@ def summarize(source: Path, output: Path) -> None:
     for name, expected in record["verdict_artifact_sha256"].items():
         if hashlib.sha256(Path(name).read_bytes()).hexdigest() != expected:
             raise ValueError("verdict evidence changed")
-    if record["candidate_policy"] != "curve_pure_v1":
+    if record["candidate_policy"] not in ARCHIVED_CURVE_POLICIES:
         raise ValueError("wrong candidate policy")
     if (
         record["declared_checks"] != DECLARED_CHECKS
@@ -110,7 +111,7 @@ def main() -> None:
                 curve_cases() if args.dataset == "v1" else curve_cases_v2(),
                 args.output,
                 args.budget_ledger,
-                policy="curve_pure_v1",
+                policy=CURVE_POLICY,
             )
         )
 

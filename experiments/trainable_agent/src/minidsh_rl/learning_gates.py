@@ -12,7 +12,7 @@ from minidsh.infrastructure.containers import DockerHost
 from minidsh_rl.feedback_coverage import CheckRecord, CoverageRow, summarize_rows
 from minidsh_rl.learning_contracts import LearningCase
 from minidsh_rl.learning_tasks import learning_cases, learning_probes
-from minidsh_rl.minirepo_verification import IMAGE, verify
+from minidsh_rl.minirepo_verification import IMAGE, CurvePolicy, verify
 
 PROJECT = Path(__file__).resolve().parents[4]
 
@@ -42,7 +42,7 @@ async def audit(
     output: Path,
     ledger: Path,
     *,
-    policy: Literal["legacy", "curve_pure_v1"] = "legacy",
+    policy: CurvePolicy = "legacy",
 ) -> None:
     """Freeze all probes, run independent checkers, preserve the entire denominator."""
     if not cases or len({case.task.case_id for case in cases}) != len(cases):

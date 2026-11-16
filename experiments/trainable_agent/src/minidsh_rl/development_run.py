@@ -36,6 +36,7 @@ from minidsh_rl.learning_rollout import LearningRollout, run_learning_rollout
 from minidsh_rl.learning_run import ExecutionConfig
 from minidsh_rl.learning_schedule import atomic_record, digest
 from minidsh_rl.learning_sdk import LeasedResources, SavedPair, _binding, tokenizer_pin
+from minidsh_rl.minirepo_verification import CURVE_POLICY
 from minidsh_rl.preflight import service_evidence
 
 
@@ -276,7 +277,7 @@ def main() -> None:
                     development_cases(),
                     args.directory,
                     args.finance / "budget.json",
-                    policy="curve_pure_v1",
+                    policy=CURVE_POLICY,
                 )
             )
         elif args.command == "prepare":

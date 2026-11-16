@@ -133,3 +133,30 @@ H3已结束：[结果](../../docs/trainable-agent-rl/batch-limit-results.md)。�
 单训练seed、既有测试集复测，不能宣称稳定收益或优于GRPO。反传查询失败后按ADR0057
 从实际权重与完整Adam状态全等的检查点恢复，原失败保留、124条轨迹未重采；
 358项实验回归及前后容器隔离检查通过。不自动扩大新seed或算法对照。
+
+
+2026-11-12：本账期方案冻结，无真实调用。[ADR 0058](../../docs/adr/0058-agentic-rl-repair-before-scale.md)
+与[正控 v2 协议](../../docs/trainable-agent-rl/positive-control-v2.md)把下一次付费实验限定为
+152 行 / 14 采样组、公式上界 33.398 元（真实可用 35.415 元）。队列生成器
+`minidsh_rl/positive_control_v2.py` 与 12 项契约测试冻结 152/33.398/14 三个分母，
+并把协议正文中的同一组数字纳入测试，避免文档与代码各说一套。零信号组改为预留 2 组补采
+（v4 有 7/24 组全错、占训练 Token 27.52%），补采无论用不用都计价。算法效果对照继续 hold。
+
+2026-11-12（同一账期，P0/P1 落地，无真实调用）：
+- **P0 策略统一**：`minirepo_verification.CURVE_POLICY` 成为唯一来源，训练反馈
+  （`learning_rollout`/`learning_feedback`）与最终判分（`learning_gates`/`curve_gates`/
+  `curve_run`/`development_run`/`learning_curve_run`）都从它取值；回读断言改为接受
+  `ARCHIVED_CURVE_POLICIES`，历史 v4/GSPO 证据仍按其本来的策略可审计。v4 实际发生的是
+  训练侧用 `legacy`、判分侧用 `curve_pure_v1`，28/192 条轨迹收到 561 次
+  `candidate_policy_rejected`。新增 `verification/policy.json` 侧车交叉校验：存在则必须与
+  `result.candidate_policy` 一致，v4 档案没有该侧车也不因此被拒。
+- **P0 控制器**：`minidsh_rl/positive_control_v2_run.py` 实现 12 计划组 + 2 补采状态机，
+  预算熔断（可用 < 2.50 元跳过第二检查点、< 1.00 元 `budget_stop`）、
+  `insufficient_updates` 与 `no_patch_submission` 标签；0 次更新仍写护栏记录。
+- **P1 适配器**：`minidsh_rl/positive_control_v2_sdk.py` 只在 `build_runtime` 显式构造，
+  导入与构造都不触碰 SDK；评测从被测快照采样而非最新权重；零信号组照旧写 journal/receipt
+  以保持分母完整。
+- **入口**：`minidsh_rl/positive_control_v2_cli.py`（`prepare`/`inspect`/`run`），`prepare`
+  只冻结 48 行基线、`run` 先做完整配额检查再初始化只读服务。
+- 新增 45 项契约测试（策略一致性 7、控制器 13、适配器 15、CLI 8、计价口径 2）；真实研究行仍为 0/152，
+  付费执行未启动。

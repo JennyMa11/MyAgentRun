@@ -7,7 +7,7 @@ import pytest
 from minidsh_rl.curve_cases_v4 import curve_cases_v4
 from minidsh_rl.learning_rollout import PolicyBinding, run_learning_rollout
 from minidsh_rl.minirepo_prompt_probe import ExampleBackend
-from minidsh_rl.minirepo_verification import IMAGE
+from minidsh_rl.minirepo_verification import CURVE_POLICY, IMAGE
 
 from minidsh.infrastructure.containers import DockerHost
 
@@ -45,7 +45,7 @@ async def test_v4_control_uses_frozen_feedback_and_private_verdict(tmp_path: Pat
     assert value.case.public_feedback_version == "curve_public_feedback_v3"
     raw = json.loads((tmp_path / "run/result.json").read_text())
     assert raw["prompt_variant"] == "tool_example"
-    assert raw["candidate_policy"] == "curve_pure_v1"
+    assert raw["candidate_policy"] == CURVE_POLICY
     assert all(
         case.task.hidden_checks not in message.content
         for request in backend.requests

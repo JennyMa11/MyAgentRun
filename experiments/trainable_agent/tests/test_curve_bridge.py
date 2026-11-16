@@ -10,7 +10,7 @@ from minidsh_rl.curve_cases_v2 import curve_cases_v2
 from minidsh_rl.learning_feedback import verify_feedback
 from minidsh_rl.learning_rollout import PolicyBinding, assemble_group, run_learning_rollout
 from minidsh_rl.minirepo_prompt_probe import ExampleBackend
-from minidsh_rl.minirepo_verification import IMAGE
+from minidsh_rl.minirepo_verification import CURVE_POLICY, IMAGE
 
 from minidsh.infrastructure.containers import DockerHost
 
@@ -48,7 +48,7 @@ async def test_v2_profile_runs_real_feedback_without_private_context(tmp_path: P
     assert value.success
     assert len(value.turns) == 5
     result = json.loads((tmp_path / "run/result.json").read_text())
-    assert result["candidate_policy"] == "curve_pure_v1"
+    assert result["candidate_policy"] == CURVE_POLICY
     assert result["prompt_variant"] == "tool_example"
     assert await verify_feedback(
         value, tmp_path / "run", tmp_path / "feedback", DockerHost(), IMAGE

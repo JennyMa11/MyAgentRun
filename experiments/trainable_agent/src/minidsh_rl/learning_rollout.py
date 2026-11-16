@@ -17,6 +17,7 @@ from minidsh_rl.datum import TrainingBatch, build_batch
 from minidsh_rl.learning_contracts import LearningCase, uses_curve_profile
 from minidsh_rl.minirepo_prompts import instruction
 from minidsh_rl.minirepo_rollout import run_rollout as run_minirepo
+from minidsh_rl.minirepo_verification import ARCHIVED_CURVE_POLICIES, CURVE_POLICY
 from minidsh_rl.model import Sample, SamplingBackend
 from minidsh_rl.recording import FileRecordingSink
 
@@ -331,7 +332,8 @@ def _load(case: LearningCase, directory: Path, policy: PolicyBinding) -> Learnin
         raise ValueError("instruction identity mismatch")
     curve = uses_curve_profile(case.dataset_version)
     if curve and (
-        result.candidate_policy != "curve_pure_v1" or result.prompt_variant != "tool_example"
+        result.candidate_policy not in ARCHIVED_CURVE_POLICIES
+        or result.prompt_variant != "tool_example"
     ):
         raise ValueError("curve Harness/policy mismatch")
     if policy.kind == "provider" and (
@@ -362,6 +364,15 @@ def _load(case: LearningCase, directory: Path, policy: PolicyBinding) -> Learnin
         if verdict.passed and (verdict.exit_code != 0 or verdict.timed_out):
             raise ValueError("inconsistent successful verdict")
         executed = verdict.exit_code != -1
+        # The verifier records which policy it judged under.  When that sidecar is
+        # present it must name the same policy the run used, which is what makes
+        # "training feedback and grading agree" checkable rather than promised.
+        # v4 archives predate the sidecar, so its absence is not treated as a pass.
+        decision = directory / "verification/policy.json"
+        if decision.exists():
+            recorded = json.loads(_read(decision))
+            if not isinstance(recorded, dict) or recorded.get("policy") != result.candidate_policy:
+                raise ValueError("training feedback and verification policy disagree")
     elif result.success or result.failure_type not in {
         "forbidden_workspace_change",
         "candidate_capture_failed",
@@ -480,7 +491,7 @@ async def run_learning_rollout(  # noqa: PLR0913 - explicit isolated dependencie
         max_output_per_call=1024,
         prompt_variant="tool_example" if uses_curve_profile(case.dataset_version) else "original",
         read_variant="batch_read_eight",
-        candidate_policy="curve_pure_v1" if uses_curve_profile(case.dataset_version) else "legacy",
+        candidate_policy=CURVE_POLICY if uses_curve_profile(case.dataset_version) else "legacy",
     )
     await seal_rollout(case, output, policy)
     return await asyncio.to_thread(load_rollout, case, output, policy)

@@ -60,6 +60,39 @@ def test_tool_json_is_not_reencoded_as_generated_tokens() -> None:
     assert response.tool_calls[0].call_id == "call_1"
 
 
+def test_terminal_end_of_turn_marker_is_framing_not_output() -> None:
+    """The sampler ends every turn with `<|im_end|>`; it must not break the envelope.
+
+    Regression: the first real positive-control v2 rollout produced three
+    well-formed `<tool_call>` blocks, all rejected as `trailing text after tool
+    envelope`, so `tool_calls` stayed 0 and the run failed with `invalid_action`.
+    The marker is added by the chat template, not chosen by the model.
+    """
+    body = '<tool_call>{"name":"x","arguments":{}}</tool_call>'
+    assert parse_output(body + "<|im_end|>", "call").tool_calls[0].name == "x"
+    assert parse_output(body + "<|im_end|>\n", "call").tool_calls[0].name == "x"
+    # A checkpoint can emit it twice; both are framing, so both go.
+    assert parse_output(body + "<|im_end|><|im_end|>", "call").tool_calls[0].name == "x"
+
+
+def test_end_of_turn_marker_inside_the_envelope_is_still_rejected() -> None:
+    """Only terminal markers are framing; an interior one is model error."""
+    with pytest.raises(ValueError, match="tool"):
+        parse_output('<tool_call>{"name":"x",<|im_end|>"arguments":{}}</tool_call>', "call")
+    with pytest.raises(ValueError, match="tool"):
+        parse_output(
+            '<tool_call>{"name":"x","arguments":{}}</tool_call> then <|im_end|> more', "call"
+        )
+
+
+def test_end_of_turn_marker_is_preserved_in_plain_prose() -> None:
+    """A model that writes the marker as text keeps that text: nothing is invented."""
+    text = "I cannot finish.<|im_end|>"
+    response = parse_output(text, "call")
+    assert response.tool_calls == ()
+    assert response.content == "I cannot finish."
+
+
 @pytest.mark.parametrize(
     "text",
     [

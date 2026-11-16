@@ -12,7 +12,7 @@ from minidsh_rl.learning_contracts import uses_curve_profile
 from minidsh_rl.learning_rollout import LearningRollout, load_rollout
 from minidsh_rl.learning_schedule import FrozenRecord, atomic_record, digest
 from minidsh_rl.minirepo_analysis import feedback_revision_indices
-from minidsh_rl.minirepo_verification import verify
+from minidsh_rl.minirepo_verification import CURVE_POLICY, verify
 
 OperationName = Literal["read", "read_many", "search", "patch", "test"]
 
@@ -156,9 +156,7 @@ async def verify_feedback(
             candidate,
             image,
             output / f"patch_{patch:03}",
-            policy="curve_pure_v1"
-            if uses_curve_profile(rollout.case.dataset_version)
-            else "legacy",
+            policy=CURVE_POLICY if uses_curve_profile(rollout.case.dataset_version) else "legacy",
         )
         checks.append(
             PartialCheck(

@@ -27,7 +27,7 @@ from minidsh_rl.learning_run import ExecutionConfig, _tokenizer, sdk_sources
 from minidsh_rl.learning_schedule import atomic_record, digest
 from minidsh_rl.learning_sdk import LeasedResources
 from minidsh_rl.learning_tasks import learning_probes
-from minidsh_rl.minirepo_verification import IMAGE
+from minidsh_rl.minirepo_verification import ARCHIVED_CURVE_POLICIES, IMAGE
 from minidsh_rl.preflight import service_evidence
 
 
@@ -38,7 +38,7 @@ def validate_data(source: Path, cases: tuple[LearningCase, ...] | None = None) -
     if (
         record["completed_checks"] != declared
         or record["declared_checks"] != declared
-        or record["candidate_policy"] != "curve_pure_v1"
+        or record["candidate_policy"] not in ARCHIVED_CURVE_POLICIES
         or not record["source_unchanged"]
         or not coverage_gate(record["rows"], declared=declared)
     ):

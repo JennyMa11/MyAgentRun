@@ -75,8 +75,36 @@ def _native_envelope(encoded: str) -> str:
     return json.dumps({"name": matched.group(1), "arguments": native_arguments})
 
 
+# The tokenizer's end-of-turn marker. `apply_chat_template` adds it after every
+# assistant turn, so the sampler can emit it back as the last generated token.
+_END_OF_TURN = "<|im_end|>"
+
+
+def _strip_end_of_turn(text: str) -> str:
+    """Remove only terminal end-of-turn markers and the blank space they leave.
+
+    Deliberately narrow: repeated because a checkpoint can emit the marker twice,
+    but only from the end, so interior text is never rewritten.
+    """
+    trimmed = text.rstrip()
+    while trimmed.endswith(_END_OF_TURN):
+        trimmed = trimmed[: -len(_END_OF_TURN)].rstrip()
+    return trimmed
+
+
 def parse_output(text: str, call_id: str) -> ModelResponse:
-    """Parse one Qwen tool envelope without fixing or resampling its contents."""
+    """Parse one Qwen tool envelope without fixing or resampling its contents.
+
+    The provider terminates a generation with the tokenizer's end-of-turn marker
+    (`<|im_end|>`, id 248046 for this vocabulary). It is a *framing* token, not
+    model output: it arrives after `</tool_call>` and made every tool call fail with
+    `trailing text after tool envelope` until it was stripped here. Stripping is
+    safe because it can only appear as a suffix — a copy inside the envelope would
+    still be rejected as invalid JSON, and one inside the prefix is model text and
+    stays. Only exact terminal occurrences are removed, so a model that literally
+    writes the marker in prose keeps that text.
+    """
+    text = _strip_end_of_turn(text)
     if "<tool_call>" not in text:
         if "</tool_call>" in text:
             raise ValueError("invalid tool envelope")
