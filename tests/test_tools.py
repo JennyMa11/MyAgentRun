@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.domain import Event, ToolCall, ToolStatus
-from minidsh.infrastructure import (
+from myagentrun.domain import Event, ToolCall, ToolStatus
+from myagentrun.infrastructure import (
     CommandDeniedError,
     CommandPolicy,
     DockerCommandRunner,
@@ -16,8 +16,8 @@ from minidsh.infrastructure import (
     SandboxViolationError,
     WorkspaceSandbox,
 )
-from minidsh.runtime import EventBus
-from minidsh.tools import (
+from myagentrun.runtime import EventBus
+from myagentrun.tools import (
     OpenFileTool,
     PatchFileTool,
     PermissionPolicy,
@@ -28,7 +28,7 @@ from minidsh.tools import (
     ToolRuntime,
     WriteFileTool,
 )
-from minidsh.tools.builtin import OpenFileInput
+from myagentrun.tools.builtin import OpenFileInput
 
 
 def test_sandbox_rejects_parent_traversal_and_absolute_paths(tmp_path: Path) -> None:

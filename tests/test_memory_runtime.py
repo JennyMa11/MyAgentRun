@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters.memory import SQLiteMemoryStore
-from minidsh.adapters.trace import JsonlTraceWriter
-from minidsh.domain import JsonValue, Message, Role, ToolCall, ToolStatus
-from minidsh.domain.memory import MemoryStatus, MemoryValidationError
-from minidsh.runtime import EventBus
-from minidsh.runtime.memory import MemoryService, ProposeMemoryTool
-from minidsh.tools import PermissionPolicy, ToolRegistry, ToolRuntime
-from minidsh.tools.runtime import ToolError
+from myagentrun.adapters.memory import SQLiteMemoryStore
+from myagentrun.adapters.trace import JsonlTraceWriter
+from myagentrun.domain import JsonValue, Message, Role, ToolCall, ToolStatus
+from myagentrun.domain.memory import MemoryStatus, MemoryValidationError
+from myagentrun.runtime import EventBus
+from myagentrun.runtime.memory import MemoryService, ProposeMemoryTool
+from myagentrun.tools import PermissionPolicy, ToolRegistry, ToolRuntime
+from myagentrun.tools.runtime import ToolError
 
 pytestmark = pytest.mark.integration
 

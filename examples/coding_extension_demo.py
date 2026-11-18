@@ -13,14 +13,14 @@ import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from minidsh.adapters import ScriptedModel
-from minidsh.composition import RuntimeOptions, plugin_runtime
-from minidsh.domain import AgentBudget, Event, ModelResponse, RunStatus, ToolCall
-from minidsh.domain.verification import VerificationConfig
+from myagentrun.adapters import ScriptedModel
+from myagentrun.composition import RuntimeOptions, plugin_runtime
+from myagentrun.domain import AgentBudget, Event, ModelResponse, RunStatus, ToolCall
+from myagentrun.domain.verification import VerificationConfig
 
 
 async def main() -> None:
-    with TemporaryDirectory(prefix="minidsh-coding-demo-") as directory:
+    with TemporaryDirectory(prefix="myagentrun-coding-demo-") as directory:
         workspace = Path(directory) / "workspace"
         workspace.mkdir()
         shutil.copytree(Path(__file__).parent / "skills", workspace / "skills")

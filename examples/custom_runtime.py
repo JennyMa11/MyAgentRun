@@ -10,13 +10,13 @@ from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from minidsh.adapters import ScriptedModel
-from minidsh.composition import RuntimeOptions, RuntimeServices, ToolBundle, plugin_runtime
-from minidsh.context import SlidingWindowContext
-from minidsh.domain import ModelResponse, RunStatus, ToolCall
-from minidsh.infrastructure import WorkspaceSandbox
-from minidsh.runtime import PluginManifest, ServiceRegistry
-from minidsh.tools import ReadFileTool
+from myagentrun.adapters import ScriptedModel
+from myagentrun.composition import RuntimeOptions, RuntimeServices, ToolBundle, plugin_runtime
+from myagentrun.context import SlidingWindowContext
+from myagentrun.domain import ModelResponse, RunStatus, ToolCall
+from myagentrun.infrastructure import WorkspaceSandbox
+from myagentrun.runtime import PluginManifest, ServiceRegistry
+from myagentrun.tools import ReadFileTool
 
 
 class ExamplePlugin:
@@ -54,7 +54,7 @@ class ExamplePlugin:
 
 async def main() -> None:
     """Compose and run an isolated, offline example, then release the plugin."""
-    with TemporaryDirectory(prefix="minidsh-plugin-") as directory:
+    with TemporaryDirectory(prefix="myagentrun-plugin-") as directory:
         workspace = Path(directory)
         (workspace / "hello.txt").write_text("Hello from a plugin!\n", encoding="utf-8")
         async with plugin_runtime(

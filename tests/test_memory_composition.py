@@ -7,19 +7,26 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import ScriptedModel
-from minidsh.adapters.file_backend import LocalFileBackend
-from minidsh.adapters.memory import SQLiteMemoryStore
-from minidsh.adapters.memory_evidence import JsonMemoryEvidenceSource
-from minidsh.composition import (
+from myagentrun.adapters import ScriptedModel
+from myagentrun.adapters.file_backend import LocalFileBackend
+from myagentrun.adapters.memory import SQLiteMemoryStore
+from myagentrun.adapters.memory_evidence import JsonMemoryEvidenceSource
+from myagentrun.composition import (
     RuntimeComponents,
     RuntimeOptions,
     build_local_runtime,
     plugin_runtime,
 )
-from minidsh.configured_runtime import build_configured_runtime
-from minidsh.domain import AgentBudget, ModelResponse, RunStatus, TokenUsage, ToolCall, ToolStatus
-from minidsh.domain.memory import (
+from myagentrun.configured_runtime import build_configured_runtime
+from myagentrun.domain import (
+    AgentBudget,
+    ModelResponse,
+    RunStatus,
+    TokenUsage,
+    ToolCall,
+    ToolStatus,
+)
+from myagentrun.domain.memory import (
     MemoryConfig,
     MemoryEntry,
     MemoryEvidenceFile,
@@ -27,9 +34,9 @@ from minidsh.domain.memory import (
     MemoryKind,
     MemoryStatus,
 )
-from minidsh.domain.verification import VerificationConfig
-from minidsh.runtime.hooks import HookRegistry
-from minidsh.tools import PermissionPolicy
+from myagentrun.domain.verification import VerificationConfig
+from myagentrun.runtime.hooks import HookRegistry
+from myagentrun.tools import PermissionPolicy
 
 pytestmark = pytest.mark.integration
 

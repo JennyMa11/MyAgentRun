@@ -4,7 +4,7 @@ import hashlib
 
 import pytest
 
-from minidsh.domain.skills import SkillCatalog, SkillRun, SkillValidationError, parse_skill
+from myagentrun.domain.skills import SkillCatalog, SkillRun, SkillValidationError, parse_skill
 
 
 def document(name: str = "bug_fix", body: str = "Inspect the failure.") -> bytes:

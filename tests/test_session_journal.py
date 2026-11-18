@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import JsonSessionStore, ScriptedModel
-from minidsh.adapters.session_journal import JsonlSessionJournal
-from minidsh.application.session_journal import MemorySessionJournal
-from minidsh.composition import RuntimeComponents, RuntimeOptions, build_local_runtime
-from minidsh.domain import Message, ModelResponse, Role, RunStatus, ToolCall
-from minidsh.infrastructure import SandboxViolationError
+from myagentrun.adapters import JsonSessionStore, ScriptedModel
+from myagentrun.adapters.session_journal import JsonlSessionJournal
+from myagentrun.application.session_journal import MemorySessionJournal
+from myagentrun.composition import RuntimeComponents, RuntimeOptions, build_local_runtime
+from myagentrun.domain import Message, ModelResponse, Role, RunStatus, ToolCall
+from myagentrun.infrastructure import SandboxViolationError
 
 
 @pytest.mark.asyncio
@@ -84,7 +84,7 @@ async def test_persistent_journal_redacts_before_projection(tmp_path: Path) -> N
 async def test_journal_rejects_corrupt_sequence(tmp_path: Path) -> None:
     log = await JsonlSessionJournal(tmp_path).create("run")
     await log.append(0, Message(Role.USER, "task"))
-    path = tmp_path / ".minidsh/session_events/run.jsonl"
+    path = tmp_path / ".myagentrun/session_events/run.jsonl"
     path.write_text(path.read_text().replace('"sequence": 1', '"sequence": 2'))
     with pytest.raises(ValueError, match="sequence"):
         await JsonlSessionJournal(tmp_path).open("run")
@@ -100,7 +100,7 @@ async def test_terminal_history_is_derived_from_facts_when_snapshot_is_stale(
         options=RuntimeOptions(),
     )
     result = await runtime.agent.run("task", run_id="run")
-    snapshot = tmp_path / ".minidsh/sessions/run.json"
+    snapshot = tmp_path / ".myagentrun/sessions/run.json"
     snapshot.write_text(snapshot.read_text().replace('"content": "task"', '"content": "stale"'))
     loaded = await JsonSessionStore(tmp_path).load("run")
     assert loaded is not None
@@ -131,7 +131,7 @@ async def test_memory_and_disk_apply_the_same_credential_policy(tmp_path: Path) 
 async def test_partial_tail_is_rejected_without_rewriting_facts(tmp_path: Path) -> None:
     log = await JsonlSessionJournal(tmp_path).create("run")
     await log.append(0, Message(Role.USER, "task"))
-    path = tmp_path / ".minidsh/session_events/run.jsonl"
+    path = tmp_path / ".myagentrun/session_events/run.jsonl"
     broken = path.read_text() + '{"sequence":'
     path.write_text(broken)
     with pytest.raises(ValueError, match="incomplete"):
@@ -145,7 +145,7 @@ async def test_journal_directory_symlink_cannot_escape_workspace(tmp_path: Path)
     workspace.mkdir()
     outside = tmp_path / "outside"
     outside.mkdir()
-    (workspace / ".minidsh").symlink_to(outside, target_is_directory=True)
+    (workspace / ".myagentrun").symlink_to(outside, target_is_directory=True)
 
     with pytest.raises(SandboxViolationError):
         await JsonlSessionJournal(workspace).create("run")

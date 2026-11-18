@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters.memory import SQLiteMemoryStore
-from minidsh.domain.memory import (
+from myagentrun.adapters.memory import SQLiteMemoryStore
+from myagentrun.domain.memory import (
     MemoryEntry,
     MemoryEvidence,
     MemoryEvidenceKind,
@@ -19,7 +19,7 @@ from minidsh.domain.memory import (
     MemoryValidationError,
     select_memory,
 )
-from minidsh.ports.memory import MemoryStoreError
+from myagentrun.ports.memory import MemoryStoreError
 
 pytestmark = pytest.mark.integration
 

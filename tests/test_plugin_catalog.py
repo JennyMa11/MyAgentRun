@@ -2,10 +2,10 @@
 
 import pytest
 
-from minidsh.domain import JsonValue
-from minidsh.runtime.catalog import PluginCatalog, PluginSpec
-from minidsh.runtime.plugins import PluginManifest
-from minidsh.runtime.services import ServiceRegistry
+from myagentrun.domain import JsonValue
+from myagentrun.runtime.catalog import PluginCatalog, PluginSpec
+from myagentrun.runtime.plugins import PluginManifest
+from myagentrun.runtime.services import ServiceRegistry
 
 
 class _Plugin:

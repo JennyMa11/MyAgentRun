@@ -9,17 +9,17 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import ModelProfile, ScriptedModel
-from minidsh.cli import main
-from minidsh.domain import ModelRequest, ModelResponse, ToolCall
-from minidsh.gui import GuiSession
+from myagentrun.adapters import ModelProfile, ScriptedModel
+from myagentrun.cli import main
+from myagentrun.domain import ModelRequest, ModelResponse, ToolCall
+from myagentrun.gui import GuiSession
 
 
 def test_noninteractive_run_loads_workspace_key_and_redacts_provider_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
-    credential_file = tmp_path / ".minidsh" / "credentials.toml"
+    credential_file = tmp_path / ".myagentrun" / "credentials.toml"
     credential_file.parent.mkdir()
     credential_file.write_text('[credentials]\nDEEPSEEK_API_KEY = "saved-provider-key"\n')
     received: list[str] = []
@@ -31,7 +31,7 @@ def test_noninteractive_run_loads_workspace_key_and_redacts_provider_output(
         received.append(profile.api_key(environ))
         return ScriptedModel([ModelResponse(content="completed saved-provider-key")])
 
-    monkeypatch.setattr("minidsh.cli.build_provider_model", provider)
+    monkeypatch.setattr("myagentrun.cli.build_provider_model", provider)
     with pytest.raises(SystemExit) as exc:
         main(
             [
@@ -59,15 +59,15 @@ def test_explicit_scripted_provider_overrides_environment_model_profile(
     command: str,
 ) -> None:
     for key in tuple(os.environ):
-        if key.startswith("MINIDSH_"):
+        if key.startswith("MYAGENTRUN_"):
             monkeypatch.delenv(key)
-    monkeypatch.setenv("MINIDSH_MODEL_PROFILE", "deepseek")
+    monkeypatch.setenv("MYAGENTRUN_MODEL_PROFILE", "deepseek")
 
     def forbid_provider(*args: object, **kwargs: object) -> None:
         del args, kwargs
         pytest.fail("explicit scripted mode must never construct a real provider")
 
-    monkeypatch.setattr("minidsh.cli.build_provider_model", forbid_provider)
+    monkeypatch.setattr("myagentrun.cli.build_provider_model", forbid_provider)
     script = tmp_path / "responses.json"
     script.write_text('[{"content": "offline answer"}]', encoding="utf-8")
     manifest = tmp_path / "manifest.json"
@@ -153,7 +153,7 @@ def test_version_is_available(capsys: pytest.CaptureFixture[str]) -> None:
         main(["--version"])
 
     assert exit_info.value.code == 0
-    assert capsys.readouterr().out.startswith("mini-dsh ")
+    assert capsys.readouterr().out.startswith("myagentrun ")
 
 
 def _write_trace(path: Path, *, tool: str, context_tokens: int) -> None:
@@ -313,13 +313,13 @@ def test_api_key_env_names_the_credential_for_an_ad_hoc_endpoint(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``MINIDSH_API_KEY_ENV`` must mean the same thing on every provider path.
+    """``MYAGENTRUN_API_KEY_ENV`` must mean the same thing on every provider path.
 
     It is honoured for named profiles, so ignoring it for an explicit endpoint
     would make "where does my key come from" depend on which flag was used.
     The observable proof is that the error names the variable it looked for.
     """
-    monkeypatch.setenv("MINIDSH_API_KEY_ENV", "MY_PROVIDER_TOKEN")
+    monkeypatch.setenv("MYAGENTRUN_API_KEY_ENV", "MY_PROVIDER_TOKEN")
     monkeypatch.delenv("MY_PROVIDER_TOKEN", raising=False)
 
     with pytest.raises(SystemExit) as exit_info:
@@ -350,10 +350,10 @@ def test_config_profile_and_cli_can_revoke_file_permissions(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     for key in tuple(os.environ):
-        if key.startswith("MINIDSH_"):
+        if key.startswith("MYAGENTRUN_"):
             monkeypatch.delenv(key)
-    (tmp_path / "minidsh.toml").write_text(
-        "[minidsh]\nallow_write = true\nallow_shell = true\n"
+    (tmp_path / "myagentrun.toml").write_text(
+        "[myagentrun]\nallow_write = true\nallow_shell = true\n"
         '[profiles.review]\ncontext_strategy = "summary"\nrecent_messages = 3\n',
         encoding="utf-8",
     )
@@ -391,7 +391,7 @@ def test_cli_runs_an_offline_team_and_can_replay_a_child(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     for key in tuple(os.environ):
-        if key.startswith("MINIDSH_"):
+        if key.startswith("MYAGENTRUN_"):
             monkeypatch.delenv(key)
     parent = tmp_path / "parent.json"
     child = tmp_path / "child.json"
@@ -456,9 +456,9 @@ def test_disabling_team_profile_keeps_single_agent_runnable(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     for key in tuple(os.environ):
-        if key.startswith("MINIDSH_"):
+        if key.startswith("MYAGENTRUN_"):
             monkeypatch.delenv(key)
-    (tmp_path / "minidsh.toml").write_text(
+    (tmp_path / "myagentrun.toml").write_text(
         "[profiles.team]\nmulti_agent_enabled = true\n"
         'enabled_tools = ["read_file", "delegate_sub_agents"]\n',
         encoding="utf-8",
@@ -487,7 +487,7 @@ def test_gui_key_is_forwarded_to_parent_and_subagents_without_changing_environme
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     for key in tuple(os.environ):
-        if key.startswith("MINIDSH_"):
+        if key.startswith("MYAGENTRUN_"):
             monkeypatch.delenv(key)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     received: list[str] = []
@@ -539,12 +539,12 @@ def test_gui_key_is_forwarded_to_parent_and_subagents_without_changing_environme
         assert session.snapshot()["status"] == "finished"
         assert session.snapshot()["sub_agents"][0]["answer"] == "child result [REDACTED]"
         assert key not in str(session.snapshot())
-        for artifact in (tmp_path / ".minidsh").rglob("*"):
+        for artifact in (tmp_path / ".myagentrun").rglob("*"):
             if artifact.is_file():
                 assert key not in artifact.read_text(encoding="utf-8")
 
-    monkeypatch.setattr("minidsh.cli.build_provider_model", provider)
-    monkeypatch.setattr("minidsh.cli.serve_gui", serve)
+    monkeypatch.setattr("myagentrun.cli.build_provider_model", provider)
+    monkeypatch.setattr("myagentrun.cli.serve_gui", serve)
     with pytest.raises(SystemExit) as exit_info:
         main(["gui", "--workspace", str(tmp_path), "--model-profile", "deepseek", "--no-open"])
     assert exit_info.value.code == 0

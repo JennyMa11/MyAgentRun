@@ -6,16 +6,20 @@ from pathlib import Path
 import httpx
 import pytest
 
-from minidsh.adapters.models import CredentialRedactingModel, OpenAICompatibleModel, ScriptedModel
-from minidsh.application.agent_loop import AgentLoop
-from minidsh.benchmark.mini_dsh import CohortBudget, _GateModel
-from minidsh.composition import RuntimeComponents, RuntimeOptions, build_local_runtime
-from minidsh.context import FullHistoryContext
-from minidsh.domain import Message, ModelRequest, ModelResponse, Role, ToolCall
-from minidsh.domain.harness import ApprovalChoice, StreamEvent
-from minidsh.runtime import EventBus
-from minidsh.runtime.approvals import ApprovalBroker
-from minidsh.runtime.hooks import HookRegistry
+from myagentrun.adapters.models import (
+    CredentialRedactingModel,
+    OpenAICompatibleModel,
+    ScriptedModel,
+)
+from myagentrun.application.agent_loop import AgentLoop
+from myagentrun.benchmark.mini_dsh import CohortBudget, _GateModel
+from myagentrun.composition import RuntimeComponents, RuntimeOptions, build_local_runtime
+from myagentrun.context import FullHistoryContext
+from myagentrun.domain import Message, ModelRequest, ModelResponse, Role, ToolCall
+from myagentrun.domain.harness import ApprovalChoice, StreamEvent
+from myagentrun.runtime import EventBus
+from myagentrun.runtime.approvals import ApprovalBroker
+from myagentrun.runtime.hooks import HookRegistry
 
 
 @pytest.mark.asyncio

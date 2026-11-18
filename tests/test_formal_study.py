@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.benchmark.formal import (
+from myagentrun.benchmark.formal import (
     FORMAL_VARIANTS,
     Checkpoint,
     StudyKey,
@@ -16,16 +16,16 @@ from minidsh.benchmark.formal import (
     paired_summary,
     schedule,
 )
-from minidsh.benchmark.runner import (
+from myagentrun.benchmark.runner import (
     BenchmarkError,
     BenchmarkManifest,
     BenchmarkRunner,
     BenchmarkTask,
     TaskMetrics,
 )
-from minidsh.domain import ModelResponse
-from minidsh.evaluation.inference import inference_from_trace
-from minidsh.evaluation.tracefile import TraceRecord, TraceRun
+from myagentrun.domain import ModelResponse
+from myagentrun.evaluation.inference import inference_from_trace
+from myagentrun.evaluation.tracefile import TraceRecord, TraceRun
 
 
 def _result(task_id: str, tokens: int, *, success: bool = True) -> TaskMetrics:

@@ -26,19 +26,19 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from minidsh.adapters import ScriptedModel
-from minidsh.adapters.session_journal import JsonlSessionJournal
-from minidsh.application.session_journal import MemorySessionJournal
-from minidsh.benchmark.runner import BenchmarkManifest, BenchmarkRunner, BenchmarkTask
-from minidsh.cli import task_options
-from minidsh.composition import (
+from myagentrun.adapters import ScriptedModel
+from myagentrun.adapters.session_journal import JsonlSessionJournal
+from myagentrun.application.session_journal import MemorySessionJournal
+from myagentrun.benchmark.runner import BenchmarkManifest, BenchmarkRunner, BenchmarkTask
+from myagentrun.cli import task_options
+from myagentrun.composition import (
     LocalRuntime,
     RuntimeComponents,
     RuntimeOptions,
     build_local_runtime,
 )
-from minidsh.domain import ModelPricing
-from minidsh.evaluation import TraceRun, build_replay
+from myagentrun.domain import ModelPricing
+from myagentrun.evaluation import TraceRun, build_replay
 
 PROJECT = Path(__file__).resolve().parent.parent
 BASELINES = ("smoke", "core", "stress")
@@ -202,7 +202,7 @@ def run_baselines(output: Path, metadata: dict[str, Any]) -> None:
         argv = [
             sys.executable,
             "-m",
-            "minidsh",
+            "myagentrun",
             command,
             f"benchmarks/{suite}/manifest.json",
             *common,

@@ -1,5 +1,5 @@
-# Copy to <workspace>/minidsh.toml or select with --config examples/profiles.toml.
-[minidsh]
+# Copy to <workspace>/myagentrun.toml or select with --config examples/profiles.toml.
+[myagentrun]
 allow_write = false
 allow_shell = false
 max_steps = 30

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.domain import FailureCategory, JsonValue
-from minidsh.evaluation import (
+from myagentrun.domain import FailureCategory, JsonValue
+from myagentrun.evaluation import (
     MetricPoint,
     TraceError,
     TraceRun,
@@ -19,10 +19,10 @@ from minidsh.evaluation import (
     pareto,
     tool_latencies,
 )
-from minidsh.evaluation.diff import to_markdown as diff_to_markdown
-from minidsh.evaluation.replay import to_markdown as replay_to_markdown
-from minidsh.evaluation.taxonomy import summarize, summarize_layers
-from minidsh.evaluation.tracefile import TraceRecord
+from myagentrun.evaluation.diff import to_markdown as diff_to_markdown
+from myagentrun.evaluation.replay import to_markdown as replay_to_markdown
+from myagentrun.evaluation.taxonomy import summarize, summarize_layers
+from myagentrun.evaluation.tracefile import TraceRecord
 
 
 def _record(name: str, step_id: int = 0, **data: JsonValue) -> TraceRecord:

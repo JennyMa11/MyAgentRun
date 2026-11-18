@@ -7,13 +7,21 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import (
+from myagentrun.adapters import (
     CredentialRedactingModel,
     JsonlTraceWriter,
     ModelAdapterError,
     ScriptedModel,
 )
-from minidsh.domain import Event, Message, ModelRequest, ModelResponse, Role, TokenUsage, ToolCall
+from myagentrun.domain import (
+    Event,
+    Message,
+    ModelRequest,
+    ModelResponse,
+    Role,
+    TokenUsage,
+    ToolCall,
+)
 
 
 @pytest.mark.asyncio

@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters.file_backend import DockerFileBackend
-from minidsh.domain import JsonValue
-from minidsh.infrastructure import CommandPolicy, LocalCommandRunner, WorkspaceSandbox
-from minidsh.infrastructure.file_worker import dispatch
-from minidsh.tools.builtin import PatchFileInput, PatchFileTool
-from minidsh.tools.runtime import ToolError
+from myagentrun.adapters.file_backend import DockerFileBackend
+from myagentrun.domain import JsonValue
+from myagentrun.infrastructure import CommandPolicy, LocalCommandRunner, WorkspaceSandbox
+from myagentrun.infrastructure.file_worker import dispatch
+from myagentrun.tools.builtin import PatchFileInput, PatchFileTool
+from myagentrun.tools.runtime import ToolError
 
 
 def test_worker_patch_and_symbol_search_share_workspace(tmp_path: Path) -> None:
@@ -28,13 +28,28 @@ def test_worker_rejects_sensitive_and_symlink_escape(tmp_path: Path) -> None:
     (tmp_path / ".env").write_text("secret=hidden")
     with pytest.raises(ValueError, match="sensitive"):
         dispatch(tmp_path, "read_file", {"path": ".env"})
+    for directory in (".myagentrun", ".minidsh"):
+        private = tmp_path / directory / "private.txt"
+        private.parent.mkdir()
+        private.write_text("private-runtime-state")
+        with pytest.raises(ValueError, match="sensitive"):
+            dispatch(tmp_path, "read_file", {"path": f"{directory}/private.txt"})
+        with pytest.raises(ValueError, match="not model-writable"):
+            dispatch(
+                tmp_path,
+                "prepare",
+                {
+                    "tool": "write_file",
+                    "arguments": {"path": f"{directory}/artifacts/result", "content": "bad"},
+                },
+            )
     with pytest.raises(ValueError, match="not model-writable"):
         dispatch(
             tmp_path,
             "prepare",
             {
                 "tool": "write_file",
-                "arguments": {"path": ".minidsh/artifacts/result", "content": "bad"},
+                "arguments": {"path": ".myagentrun/artifacts/result", "content": "bad"},
             },
         )
     outside = tmp_path.parent / "outside-file"
@@ -96,6 +111,16 @@ async def test_node_worker_preserves_file_and_path_contracts_without_python(tmp_
         {"path": "solution.js", "line": 1, "text": "function add(a,b) { return a+b; }"}
     ]
     (tmp_path / ".env").write_text("fixture_secret_must_not_escape")
+    for directory in (".myagentrun", ".minidsh"):
+        private = tmp_path / directory / "private.txt"
+        private.parent.mkdir()
+        private.write_text("private-runtime-state")
+        with pytest.raises(ToolError, match="file_backend_denied"):
+            await backend.invoke("read_file", {"path": f"{directory}/private.txt"})
+        with pytest.raises(ToolError, match="file_backend_denied"):
+            await backend.prepare(
+                "write_file", {"path": f"{directory}/artifacts/result", "content": "bad"}
+            )
     outside = tmp_path.parent / "outside-node.txt"
     outside.write_text("outside")
     (tmp_path / "escape").symlink_to(outside)

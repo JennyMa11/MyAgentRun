@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters.models import ScriptedModel
-from minidsh.composition import RuntimeOptions, build_local_runtime
-from minidsh.domain import ModelResponse
+from myagentrun.adapters.models import ScriptedModel
+from myagentrun.composition import RuntimeOptions, build_local_runtime
+from myagentrun.domain import ModelResponse
 
 
 @pytest.mark.asyncio
@@ -25,7 +25,7 @@ async def test_session_appends_turns_without_duplicating_history(tmp_path: Path)
     summaries = await service.list()
     assert summaries[0].turn_count == 2
     assert summaries[0].latest_run_id == "second"
-    log = tmp_path / ".minidsh/conversations" / first.session_id / "events.v1.jsonl"
+    log = tmp_path / ".myagentrun/conversations" / first.session_id / "events.v1.jsonl"
     assert log.read_text().count('"content": "first task"') == 1
 
 

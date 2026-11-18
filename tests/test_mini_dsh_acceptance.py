@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from minidsh.benchmark.mini_dsh import CASE_IDS, PROTOCOL, CohortBudget, validate_protocol
-from minidsh.domain import TokenUsage
+from myagentrun.benchmark.mini_dsh import CASE_IDS, PROTOCOL, CohortBudget, validate_protocol
+from myagentrun.domain import TokenUsage
 
 
 def test_unknown_usage_stops_following_calls() -> None:

@@ -20,9 +20,9 @@ from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import DummyOutput
 
-from minidsh.domain import ToolCall
-from minidsh.domain.harness import ApprovalChoice, ApprovalRequest
-from minidsh.terminal import _COMMANDS, TerminalInput, _status_text, create_prompt_session
+from myagentrun.domain import ToolCall
+from myagentrun.domain.harness import ApprovalChoice, ApprovalRequest
+from myagentrun.terminal import _COMMANDS, TerminalInput, _status_text, create_prompt_session
 
 
 @pytest.mark.parametrize(
@@ -219,7 +219,7 @@ async def test_editor_renders_only_the_required_rows(draft: str, rows: int) -> N
 @pytest.mark.skipif(os.name != "posix", reason="real PTY acceptance is POSIX-specific")
 def test_real_terminal_shows_the_slash_command_menu() -> None:
     code = """
-from minidsh.terminal import TerminalInput
+from myagentrun.terminal import TerminalInput
 TerminalInput().read_task()
 """
     master, slave = os.openpty()
@@ -276,7 +276,7 @@ TerminalInput().read_task()
 def test_real_terminal_preserves_unicode_and_restores_modes(keys: str, expected: str) -> None:
     code = """
 import json, termios
-from minidsh.terminal import TerminalInput
+from myagentrun.terminal import TerminalInput
 before = termios.tcgetattr(0)
 terminal = TerminalInput()
 try:

@@ -17,7 +17,7 @@ from pathlib import Path
 import build_hard
 import build_repo
 
-from minidsh.benchmark.formal import frozen_tree_digest
+from myagentrun.benchmark.formal import frozen_tree_digest
 
 ROOT = Path(__file__).resolve().parent / "local_formal" / "v1"
 TASK_COUNT = 26

@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import ScriptedModel
-from minidsh.collaboration import build_multi_agent_runtime
-from minidsh.composition import LocalRuntime, RuntimeOptions, build_local_runtime
-from minidsh.domain import ModelRequest, ModelResponse, ToolCall, ToolObservation, ToolStatus
-from minidsh.gui import GuiSession, handle_connection
-from minidsh.tools import ToolRuntime
+from myagentrun.adapters import ScriptedModel
+from myagentrun.collaboration import build_multi_agent_runtime
+from myagentrun.composition import LocalRuntime, RuntimeOptions, build_local_runtime
+from myagentrun.domain import ModelRequest, ModelResponse, ToolCall, ToolObservation, ToolStatus
+from myagentrun.gui import GuiSession, handle_connection
+from myagentrun.tools import ToolRuntime
 
 
 def _session(tmp_path: Path, model: ScriptedModel) -> GuiSession:
@@ -45,7 +45,7 @@ async def test_gui_follow_up_clear_and_resume(tmp_path: Path) -> None:
     await session.action("run", {"task": "three"})
     await session.wait()
     assert [m.content for m in model.requests[2].messages[1:]] == ["one", "first", "three"]
-    assert len(list((tmp_path / ".minidsh/traces").glob("*.jsonl"))) == 3
+    assert len(list((tmp_path / ".myagentrun/traces").glob("*.jsonl"))) == 3
     assert session.snapshot()["metrics"]["cost_usd"] is None
 
 
@@ -139,7 +139,7 @@ async def test_http_auth_origin_validation_and_run(tmp_path: Path) -> None:
         assert "200 OK" in await request("/")
         assert "400 Bad Request" in await request("/", "Host: evil.test\r\n")
         assert "403 Forbidden" in await request("/api/state")
-        auth = "X-MiniDSH-Token: test-token\r\n"
+        auth = "X-MyAgentRun-Token: test-token\r\n"
         assert "403 Forbidden" in await request(
             "/api/state", auth + "Origin: https://evil.test\r\n"
         )
@@ -220,7 +220,7 @@ async def test_diff_preserves_truncated_preview(
             ToolStatus.SUCCEEDED,
             {"preview": "diff --git a/code.py b/code.py\n+api_key=hidden"},
             truncated=True,
-            artifacts=(".minidsh/artifacts/diff.json",),
+            artifacts=(".myagentrun/artifacts/diff.json",),
         )
 
     monkeypatch.setattr(ToolRuntime, "execute", execute)
@@ -230,7 +230,7 @@ async def test_diff_preserves_truncated_preview(
     diff = str(session.snapshot()["diff"])
     assert "diff --git" in diff
     assert "hidden" not in diff
-    assert ".minidsh/artifacts/diff.json" in diff
+    assert ".myagentrun/artifacts/diff.json" in diff
     assert "没有" not in diff
 
 
@@ -255,7 +255,7 @@ async def test_diff_recovers_stdout_from_truncated_json_preview(
                 "original_characters": 90_000,
             },
             truncated=True,
-            artifacts=(".minidsh/artifacts/diff.json",),
+            artifacts=(".myagentrun/artifacts/diff.json",),
         )
 
     monkeypatch.setattr(ToolRuntime, "execute", execute)
@@ -266,7 +266,7 @@ async def test_diff_recovers_stdout_from_truncated_json_preview(
     assert "diff --git" in diff
     assert "+new" in diff
     assert '"stdout"' not in diff
-    assert ".minidsh/artifacts/diff.json" in diff
+    assert ".myagentrun/artifacts/diff.json" in diff
 
 
 @pytest.mark.asyncio
@@ -415,7 +415,7 @@ async def test_gui_api_key_is_memory_only_and_reused_without_echo(tmp_path: Path
     assert received == [key, key]
     await session.action("run", {"task": "hello"})
     await session.wait()
-    for path in (tmp_path / ".minidsh").rglob("*.json*"):
+    for path in (tmp_path / ".myagentrun").rglob("*.json*"):
         assert key not in path.read_text(encoding="utf-8")
     await session.close()
     assert session.snapshot()["credentials"]["configured"] is False

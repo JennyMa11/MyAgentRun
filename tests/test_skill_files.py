@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters.file_backend import LocalFileBackend
-from minidsh.infrastructure import file_worker
-from minidsh.infrastructure.file_worker import dispatch
-from minidsh.tools.runtime import ToolError
+from myagentrun.adapters.file_backend import LocalFileBackend
+from myagentrun.infrastructure import file_worker
+from myagentrun.infrastructure.file_worker import dispatch
+from myagentrun.tools.runtime import ToolError
 
 pytestmark = pytest.mark.integration
 
@@ -145,7 +145,7 @@ def test_swap_after_resolution_does_not_read_an_outside_source(
 
 
 @pytest.mark.parametrize(
-    "relative", [".ENV.private/SKILL.md", ".SSH/nested/SKILL.md", ".MINIDSH/private/SKILL.md"]
+    "relative", [".ENV.private/SKILL.md", ".SSH/nested/SKILL.md", ".MYAGENTRUN/private/SKILL.md"]
 )
 def test_casefolded_sensitive_source_components_are_denied(tmp_path: Path, relative: str) -> None:
     path = skill(tmp_path, relative)

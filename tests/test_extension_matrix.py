@@ -5,17 +5,17 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import ScriptedModel
-from minidsh.adapters.file_backend import LocalFileBackend
-from minidsh.benchmark.extension_matrix import (
+from myagentrun.adapters import ScriptedModel
+from myagentrun.adapters.file_backend import LocalFileBackend
+from myagentrun.benchmark.extension_matrix import (
     ExtensionGroup,
     build_extension_runtime,
     extension_options,
 )
-from minidsh.composition import RuntimeEnvironment
-from minidsh.domain import AgentBudget
-from minidsh.domain.memory import MemoryConfig
-from minidsh.infrastructure import CommandPolicy, LocalCommandRunner, WorkspaceSandbox
+from myagentrun.composition import RuntimeEnvironment
+from myagentrun.domain import AgentBudget
+from myagentrun.domain.memory import MemoryConfig
+from myagentrun.infrastructure import CommandPolicy, LocalCommandRunner, WorkspaceSandbox
 
 
 def test_paired_arms_change_only_the_predeclared_option(tmp_path: Path) -> None:
@@ -85,4 +85,4 @@ def test_every_evaluation_arm_requires_an_explicitly_isolated_execution_world(
                 test_argv=("python", "visible.py"),
             )
     assert model.requests == []
-    assert not (tmp_path / ".minidsh").exists()
+    assert not (tmp_path / ".myagentrun").exists()

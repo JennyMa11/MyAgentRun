@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import ScriptedModel
-from minidsh.composition import build_local_runtime
-from minidsh.config import resolve_config
-from minidsh.domain import ModelResponse
-from minidsh.work_profile import TOOLS, full_work_config
+from myagentrun.adapters import ScriptedModel
+from myagentrun.composition import build_local_runtime
+from myagentrun.config import resolve_config
+from myagentrun.domain import ModelResponse
+from myagentrun.work_profile import TOOLS, full_work_config
 
 
 def test_full_work_profile_enables_tools_and_extensions(tmp_path: Path) -> None:
@@ -41,7 +41,7 @@ def test_full_work_profile_enables_tools_and_extensions(tmp_path: Path) -> None:
     assert options.verification is not None
     assert options.verification.argv == options.test_command
     assert options.memory is not None
-    assert options.memory.project_id == "mini_dsh"
+    assert options.memory.project_id == "myagentrun"
     assert Path(options.memory.database).parent == tmp_path / "private"
     assert not options.memory.evidence_grants
     assert not options.network.enabled

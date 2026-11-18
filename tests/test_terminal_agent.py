@@ -8,23 +8,25 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import ScriptedModel
-from minidsh.cli import _model_arguments, _work_config
-from minidsh.composition import RuntimeOptions
-from minidsh.config import resolve_config
-from minidsh.configured_runtime import build_configured_runtime
-from minidsh.domain import AgentBudget, ModelResponse
-from minidsh.infrastructure import WorkspaceSandbox
-from minidsh.runtime.catalog import PluginCatalog, PluginSpec, ValuePlugin
-from minidsh.tools.builtin import ReadFileTool
-from minidsh.tools.runtime import ToolBundle
+from myagentrun.adapters import ScriptedModel
+from myagentrun.cli import _model_arguments, _work_config
+from myagentrun.composition import RuntimeOptions
+from myagentrun.config import resolve_config
+from myagentrun.configured_runtime import build_configured_runtime
+from myagentrun.domain import AgentBudget, ModelResponse
+from myagentrun.infrastructure import WorkspaceSandbox
+from myagentrun.runtime.catalog import PluginCatalog, PluginSpec, ValuePlugin
+from myagentrun.tools.builtin import ReadFileTool
+from myagentrun.tools.runtime import ToolBundle
 
 
 def test_model_settings_follow_cli_environment_file_order(tmp_path: Path) -> None:
-    path = tmp_path / "minidsh.toml"
-    path.write_text('[minidsh]\nmodel_profile="ollama"\nmodel="file-model"\n')
+    path = tmp_path / "myagentrun.toml"
+    path.write_text('[myagentrun]\nmodel_profile="ollama"\nmodel="file-model"\n')
     resolved = resolve_config(
-        config_path=path, environ={"MINIDSH_MODEL": "env-model"}, cli={"model_profile": "deepseek"}
+        config_path=path,
+        environ={"MYAGENTRUN_MODEL": "env-model"},
+        cli={"model_profile": "deepseek"},
     )
     args = _model_arguments(
         argparse.Namespace(
@@ -42,8 +44,8 @@ def test_model_settings_follow_cli_environment_file_order(tmp_path: Path) -> Non
 
 
 def test_explicit_script_ignores_persisted_cloud_model(tmp_path: Path) -> None:
-    path = tmp_path / "minidsh.toml"
-    path.write_text('[minidsh]\nmodel_profile="deepseek"\n')
+    path = tmp_path / "myagentrun.toml"
+    path.write_text('[myagentrun]\nmodel_profile="deepseek"\n')
     resolved = resolve_config(config_path=path)
     args = _model_arguments(
         argparse.Namespace(

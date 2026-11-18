@@ -11,14 +11,14 @@ from typing import Any, ClassVar
 
 import pytest
 
-from minidsh.adapters import (
+from myagentrun.adapters import (
     JsonlTraceWriter,
     JsonSessionStore,
     ModelAdapterError,
     OpenAICompatibleModel,
     SessionStoreError,
 )
-from minidsh.domain import (
+from myagentrun.domain import (
     Event,
     Message,
     ModelRequest,
@@ -29,7 +29,7 @@ from minidsh.domain import (
     ToolCall,
     ToolDefinition,
 )
-from minidsh.infrastructure import (
+from myagentrun.infrastructure import (
     CommandPolicy,
     DockerCommandRunner,
     LocalCommandRunner,

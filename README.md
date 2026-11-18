@@ -1,6 +1,9 @@
-# Mini-dsh
+# MyAgentRun
 
-Mini-dsh 是一个供自己在终端使用的 **Coding Agent Harness / Runtime**。
+项目原名 `mini-dsh`，现统一使用 **MyAgentRun**；命令和 Python 包名为 `myagentrun`。
+旧配置、凭证与会话的迁移方式见[改名说明](docs/adr/0031-myagentrun-rename.md)。
+
+MyAgentRun 是一个供自己在终端使用的 **Coding Agent Harness / Runtime**。
 目标是在自己的仓库中持续对话，让模型读取代码、做局部修改、运行测试，并能继续追问、查看 diff 和恢复会话。
 它把任务组织成 `Observe → Plan → Act → Execute → Observe → Continue | Finish`，
 工具、权限、预算与执行记录为这条日常工作链路提供支持。
@@ -52,49 +55,49 @@ Context 对照观察到输入 Token 减少约 39.1%，尚未证明任务成功�
 
 ```bash
 uv sync --locked --all-groups
-uv run mini-dsh-work
+uv run myagentrun-work
 ```
 
 需要运行 Docker Desktop。首次启动自动构建开发镜像（需要下载依赖），随后
-复用镜像；依赖变更后使用 `uv run mini-dsh-work --rebuild-image`。
-`uv run mini-dsh-work --check` 只准备并检查配置，不调用模型。
+复用镜像；依赖变更后使用 `uv run myagentrun-work --rebuild-image`。
+`uv run myagentrun-work --check` 只准备并检查配置，不调用模型。
 启动后 `/tools` 查看 13 项工具，写入和命令仍逐次审批，执行容器禁网。
 固定测试为 `uv run --no-sync pytest -q`，固定构建为 `uv build --no-build-isolation`；
-三个人工 Skills 来自 `examples/skills`。Memory 明确绑定 mini_dsh/work_v1，
-默认在仓库父目录 `.mini-dsh-private/mini_dsh`，可用 `--memory-root /absolute/private/path`
+三个人工 Skills 来自 `examples/skills`。Memory 明确绑定 myagentrun/work_v1，
+默认在仓库父目录 `.myagentrun-private/myagentrun`，可用 `--memory-root /absolute/private/path`
 指定；没有证据与操作者批准时，候选不会进入后续 Context。
-此入口用于 Mini-dsh 自身开发，模型使用原有 Key 配置，支持透传 `--model-profile`
+此入口用于 MyAgentRun 自身开发，模型使用原有 Key 配置，支持透传 `--model-profile`
 等 work 参数。范围及限制见 [ADR 0027](docs/adr/0027-full-work-startup.md)。
 
 在本项目目录安装依赖并启动：
 
 ```bash
 uv sync --locked --all-groups
-uv run mini-dsh work --test-command "uv run pytest"
+uv run myagentrun work --test-command "uv run pytest"
 ```
 
 也可以直接裸启动，效果等价于 `work`：
 
 ```bash
-uv run mini-dsh --test-command "uv run pytest"
+uv run myagentrun --test-command "uv run pytest"
 ```
 
-如果希望在任何目录直接输入 `mini-dsh` 启动，把本仓库安装为全局工具：
+如果希望在任何目录直接输入 `myagentrun` 启动，把本仓库安装为全局工具：
 
 ```bash
-uv tool install --editable /absolute/path/to/mini-dsh
+uv tool install --editable /absolute/path/to/myagentrun
 cd /absolute/path/to/any/project
-mini-dsh
+myagentrun
 ```
 
 全局命令按当前目录解析工作区并读取该目录的配置；依赖或入口变更后重新执行
-安装命令。`mini-dsh-work` 仅用于 Mini-dsh 自身开发，不替代普通项目的 `mini-dsh`。
+安装命令。`myagentrun-work` 仅用于 MyAgentRun 自身开发，不替代普通项目的 `myagentrun`。
 
 `work` 默认使用 DeepSeek profile。启动时读取 API Key，优先级为：显式环境变量 >
-工作区 `.minidsh/credentials.toml` > 全局 `~/.config/minidsh/credentials.toml`。
+工作区 `.myagentrun/credentials.toml` > 全局 `~/.config/myagentrun/credentials.toml`。
 工作区可按 provider 覆盖全局 Key；没有工作区配置时直接使用全局默认值，不复制 Key。
-`MINIDSH_CONFIG_HOME` 可指定全局配置目录，必须是绝对路径。
-密钥配置与普通 `minidsh.toml` 运行参数分开，文件格式相同：
+`MYAGENTRUN_CONFIG_HOME` 可指定全局配置目录，必须是绝对路径。
+密钥配置与普通 `myagentrun.toml` 运行参数分开，文件格式相同：
 
 ```toml
 [credentials]
@@ -110,7 +113,7 @@ DEEPSEEK_API_KEY = "your-provider-key"
 遵循环境变量优先的规则。
 
 保存使用独立的 Tool Runtime 权限与原子替换，文件权限为 `0600`；保留同文件中其他
-provider 的 Key，并将 `/.minidsh/credentials.toml` 加到项目 `.gitignore`。
+provider 的 Key，并将 `/.myagentrun/credentials.toml` 加到项目 `.gitignore`。
 忽略规则不会自动移除已跟踪的文件。Key 以本地明文配置保存，不进入 Prompt、Session、
 Trace 或终端历史；模型文件工具和 Context 检索禁止读取该密钥文件，包括符号链接别名。
 本地模式中显式授权的 Shell/外部程序仍受已有隔离边界限制，不能据此宣称操作系统级
@@ -135,11 +138,11 @@ shell 默认只允许常用开发命令（`git`、`uv`、`python`、`python3`、
 模型不能修改 `test` 工具的命令参数。已有 CLI、环境变量或配置中的显式权限限制继续优先，
 例如 `--no-allow-write`。
 输入 `/tools` 可查看工具列表、执行后端和命令授权，无需模型凭据。
-本地后端的命令运行在启动 Mini-dsh 的同一台机器上；工作区限制不代表远程执行。
+本地后端的命令运行在启动 MyAgentRun 的同一台机器上；工作区限制不代表远程执行。
 例如需要查找并停止本机开发服务器时，启动时显式授予对应程序：
 
 ```bash
-uv run mini-dsh work --workspace /absolute/path/to/website \
+uv run myagentrun work --workspace /absolute/path/to/website \
   --allow-command git --allow-command uv \
   --allow-command lsof --allow-command ps --allow-command kill
 ```
@@ -175,7 +178,7 @@ uv run mini-dsh work --workspace /absolute/path/to/website \
 每轮输出 Run ID，重启后可以用：
 
 ```bash
-uv run mini-dsh work --test-command "uv run pytest" --resume RUN_ID
+uv run myagentrun work --test-command "uv run pytest" --resume RUN_ID
 ```
 
 用于其他仓库时，指定 `--workspace /absolute/path/to/repo` 并传入那个项目的测试命令。
@@ -197,7 +200,7 @@ uv run mini-dsh work --test-command "uv run pytest" --resume RUN_ID
 一次失败可能来自模型判断、上下文缺失、工具错误、权限拒绝或预算耗尽。
 如果只给一个成功率，就无法判断应该改模型、改运行机制，还是修评测器。
 
-Mini-dsh 把这些问题拆开：
+MyAgentRun 把这些问题拆开：
 
 | 要解决的问题 | 为什么单看最终回答不够 | 项目怎么做 |
 | --- | --- | --- |
@@ -312,7 +315,7 @@ Shell 用 argv 数组执行，不把模型字符串直接拼入 shell。
 支持 Patch 不等于已证明修改最小，当前没有统一的改动范围最小化验收。
 
 工具输出默认上限为 20,000 字符；超限 Observation 显式标记截断，可将原始输出保存到
-`.minidsh/artifacts/`，并保留预览与诊断。完整输出不自动重新注入 Context。
+`.myagentrun/artifacts/`，并保留预览与诊断。完整输出不自动重新注入 Context。
 截断既可能减少输入，也可能让模型多走几步，因此收益要同时看任务成功与总消耗。
 
 ### 权限与隔离：分别说明策略检查和硬边界
@@ -341,7 +344,7 @@ Trace 能告诉我们工具失败、预算和用量；“工具选得对”“�
 
 ### 先声明主张，再确定主指标
 
-Mini-dsh 分别评估最终任务、执行约束与机制收益，不用单个加权总分替代关键正确性或安全验收。
+MyAgentRun 分别评估最终任务、执行约束与机制收益，不用单个加权总分替代关键正确性或安全验收。
 
 | 主张 | 优先指标 | 为什么选它 | 如何检查 |
 | --- | --- | --- | --- |
@@ -452,7 +455,7 @@ coverage = denominator / eligible
 
 **是什么、为什么测：** HumanEvalPack 的 HumanEvalFix-docs 十二道 Python/JavaScript 修复题，
 用于检查真实模型能否通过工具修复函数并通过独立测试。选题按契约与上游缺陷类型，
-在 Mini-dsh 模型运行前固定，不根据成绩或参考验证结果删题。
+在 MyAgentRun 模型运行前固定，不根据成绩或参考验证结果删题。
 
 **怎么测：** DeepSeek `deepseek-flash`，temperature 0、thinking 关闭，每题一次；
 每题 20,000 Token、16 步、32 次工具调用、180 秒；整轮 240,000 Token。
@@ -660,7 +663,7 @@ Harness 延迟残差占比约 0.26% 只适用于这批任务。
 
 ```bash
 uv sync --locked --all-groups
-uv run mini-dsh doctor
+uv run myagentrun doctor
 uv run python examples/minimal_demo.py
 ```
 
@@ -669,8 +672,8 @@ uv run python examples/minimal_demo.py
 离线对话与 GUI 示例：
 
 ```bash
-uv run mini-dsh chat --provider scripted --script examples/chat_responses.json
-uv run mini-dsh gui --provider scripted --script examples/gui_responses.json --workspace .
+uv run myagentrun chat --provider scripted --script examples/chat_responses.json
+uv run myagentrun gui --provider scripted --script examples/gui_responses.json --workspace .
 ```
 
 显式 scripted provider 优先于环境中的模型 profile；不要同时指定冲突的 `--model-profile`。
@@ -681,16 +684,16 @@ uv run mini-dsh gui --provider scripted --script examples/gui_responses.json --w
 以下命令显式使用 `--allow-unpriced`，只看 Token，不用零费率冒充真实账单：
 
 ```bash
-uv run mini-dsh run "修复失败测试，并说明修改与验证结果" \
+uv run myagentrun run "修复失败测试，并说明修改与验证结果" \
   --workspace /path/to/repo --model-profile deepseek --allow-unpriced \
   --allow-write --allow-shell --allow-command python \
   --test-command "python -m pytest" \
   --max-steps 24 --max-tokens 100000 --max-tool-calls 48 --max-seconds 300
 
-uv run mini-dsh chat --workspace /path/to/repo --model-profile deepseek \
+uv run myagentrun chat --workspace /path/to/repo --model-profile deepseek \
   --allow-write --allow-shell --allow-command python --test-command "python -m pytest"
 
-uv run mini-dsh gui --workspace /path/to/repo --model-profile deepseek
+uv run myagentrun gui --workspace /path/to/repo --model-profile deepseek
 ```
 
 无参数启动等价于 `work`，进入可写交互模式；只读交互使用 `chat`。终端命令见 `/help`。
@@ -706,7 +709,7 @@ GUI 只监听 `127.0.0.1`，使用本次服务的会话凭证，可查看对话�
 不可信代码需要隔离；常规 Docker runner 的命令示例：
 
 ```bash
-uv run mini-dsh run "修复失败测试" \
+uv run myagentrun run "修复失败测试" \
   --workspace /path/to/repo --model-profile deepseek --allow-unpriced \
   --allow-write --allow-shell --allow-command python \
   --sandbox-backend docker --docker-image python:3.12-slim
@@ -720,12 +723,12 @@ uv run mini-dsh run "修复失败测试" \
 凭据文件由用户本机配置，不提交到仓库。先通过门禁，再采样；已有结果不得覆盖或选择性补跑。
 
 ```bash
-uv run python -m minidsh.benchmark.public_lite prepare
-uv run python -m minidsh.benchmark.public_lite check
-uv run python -m minidsh.benchmark.public_lite run --credentials-file .env.deepseek
+uv run python -m myagentrun.benchmark.public_lite prepare
+uv run python -m myagentrun.benchmark.public_lite check
+uv run python -m myagentrun.benchmark.public_lite run --credentials-file .env.deepseek
 
-uv run mini-dsh harness-study check
-uv run mini-dsh harness-study run --credentials-file .env.deepseek
+uv run myagentrun harness-study check
+uv run myagentrun harness-study run --credentials-file .env.deepseek
 ```
 
 在已有结果的机器上复核用新目录，按[公开评测协议](docs/lightweight-public-benchmark.md)配置
@@ -735,13 +738,13 @@ uv run mini-dsh harness-study run --credentials-file .env.deepseek
 ### 离线回放、指标与重评分
 
 ```bash
-uv run mini-dsh trace replay /path/to/trace.jsonl
-uv run mini-dsh trace diff /path/to/a.jsonl /path/to/b.jsonl \
+uv run myagentrun trace replay /path/to/trace.jsonl
+uv run myagentrun trace diff /path/to/a.jsonl /path/to/b.jsonl \
   --left-label baseline --right-label variant
-uv run mini-dsh trace metrics /path/to/trace.jsonl
-uv run mini-dsh trace metrics /path/to/trace.jsonl --evidence /path/to/evidence.json
+uv run myagentrun trace metrics /path/to/trace.jsonl
+uv run myagentrun trace metrics /path/to/trace.jsonl --evidence /path/to/evidence.json
 
-uv run mini-dsh harness-study rescore \
+uv run myagentrun harness-study rescore \
   --output-dir benchmark-results/harness-study/v1 \
   --rescore-output benchmark-results/harness-study/rescored-new
 ```
@@ -758,18 +761,18 @@ uv run python scripts/offline_regression.py
 `--allow-unpriced` 显式声明只看用量：
 
 ```bash
-uv run mini-dsh benchmark benchmarks/hard/manifest.json \
+uv run myagentrun benchmark benchmarks/hard/manifest.json \
   --model-profile deepseek --allow-unpriced --repeat 3 \
   --allow-write --allow-shell --verify-command python \
   --output benchmark-results/hard-new.json
-uv run mini-dsh report benchmark-results/hard-new.json
+uv run myagentrun report benchmark-results/hard-new.json
 ```
 
 ### 可选本地模型路径
 
 ```bash
 uv sync --extra mlx
-uv run --extra mlx mini-dsh run "修复测试" --provider mlx \
+uv run --extra mlx myagentrun run "修复测试" --provider mlx \
   --model /path/to/pinned/snapshot --workspace /path/to/repo \
   --allow-write --allow-shell --allow-command python
 ```
@@ -781,17 +784,17 @@ TTFT、decode/prefill 与 MLX peak 是可选遥测，缺失保持 null；进程�
 
 ## 配置与扩展
 
-配置优先级为 `CLI > 环境变量 > 已选命名方案 > minidsh.toml > 默认值`，可打印字段来源：
+配置优先级为 `CLI > 环境变量 > 已选命名方案 > myagentrun.toml > 默认值`，可打印字段来源：
 
 ```bash
-uv run mini-dsh config
-uv run mini-dsh config --config examples/profiles.toml --profile review
+uv run myagentrun config
+uv run myagentrun config --config examples/profiles.toml --profile review
 uv run python examples/custom_runtime.py
 ```
 
 ```toml
-# minidsh.toml
-[minidsh]
+# myagentrun.toml
+[myagentrun]
 max_steps = 12
 max_tokens = 100000
 max_seconds = 120
@@ -799,7 +802,7 @@ enabled_tools = ["read_file", "search", "git"]
 denied_tools = ["shell"]
 ```
 
-`MINIDSH_*` 环境变量、`[profiles.NAME]` 和 CLI 支持 Context、权限、预算、输出与模型参数。
+`MYAGENTRUN_*` 环境变量、`[profiles.NAME]` 和 CLI 支持 Context、权限、预算、输出与模型参数。
 `--no-allow-write` / `--no-allow-shell` 可撤销低优先级配置权限；Model Profile 和运行配置 Profile 是不同概念。
 OpenAI-compatible 接口可接 DeepSeek、OpenAI、Ollama、llama.cpp，厂商差异隔离在 adapter；
 声明了模型兼容接口不代表所有 provider 都经过同等实测。例子与协议见[真实模型评测](docs/real-model-evaluation.md)。
@@ -814,7 +817,7 @@ MCP Streamable HTTP 通过可选依赖和 Python API 接入，端点需显式网
 
 ```bash
 uv run python examples/multi_agent.py
-uv run mini-dsh chat --model-profile deepseek --multi-agent --subagent-max-parallel 2
+uv run myagentrun chat --model-profile deepseek --multi-agent --subagent-max-parallel 2
 ```
 
 子 Agent 独立模型实例、Context、run_id 与 Session，共享团队预算并受并发上限约束。
@@ -855,13 +858,13 @@ uv run mypy src tests
 uv run pytest
 ```
 
-需要重新测覆盖率时执行 `uv run pytest --cov=src/minidsh --cov-report=term-missing`。
+需要重新测覆盖率时执行 `uv run pytest --cov=src/myagentrun --cov-report=term-missing`。
 CI 见 [ci.yml](.github/workflows/ci.yml)；前台版本、规模与旧归档表格由 `tests/test_docs.py` 检查一致性。
 本页手工维护，数字来源为下列固定报告及本机产物；更新指标时保留原实验事实和评分器来源。
 
-目录按用途区分：`src/minidsh/` 是源码，`tests/` 是 pytest 套件；`benchmarks/build_*.py`
+目录按用途区分：`src/myagentrun/` 是源码，`tests/` 是 pytest 套件；`benchmarks/build_*.py`
 是 fixture 生成器，其 `fixtures/`、`verification/`、`solutions/`、manifest 与响应脚本是
-已提交的生成数据。`benchmark-results/` 和本机 `.minidsh/` 是可再生成或被忽略的运行产物；
+已提交的生成数据。`benchmark-results/` 和本机 `.myagentrun/` 是可再生成或被忽略的运行产物；
 `docs/results/` 是需要保留的冻结评测证据，不随当前源码重算覆盖。
 
 | 文档 | 内容 |

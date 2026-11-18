@@ -2,8 +2,8 @@
 
 import pytest
 
-from minidsh.context import SlidingWindowContext, SummaryCompactionContext
-from minidsh.domain import Message, Role
+from myagentrun.context import SlidingWindowContext, SummaryCompactionContext
+from myagentrun.domain import Message, Role
 
 
 @pytest.mark.parametrize("strategy", [SlidingWindowContext(2), SummaryCompactionContext(2)])

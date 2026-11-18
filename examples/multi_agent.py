@@ -7,11 +7,11 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from minidsh.adapters import JsonlTraceWriter, ScriptedModel
-from minidsh.collaboration import build_multi_agent_runtime
-from minidsh.composition import RuntimeOptions
-from minidsh.domain import RunStatus
-from minidsh.evaluation import TraceRun
+from myagentrun.adapters import JsonlTraceWriter, ScriptedModel
+from myagentrun.collaboration import build_multi_agent_runtime
+from myagentrun.composition import RuntimeOptions
+from myagentrun.domain import RunStatus
+from myagentrun.evaluation import TraceRun
 
 EXPECTED_AGENTS = 2
 EXPECTED_TOOL_CALLS = 3
@@ -27,7 +27,7 @@ async def _run(workspace: Path, examples: Path) -> None:
         ),
         options=RuntimeOptions(multi_agent_enabled=True, subagent_max_parallel=2),
     )
-    trace_path = workspace / ".minidsh" / "traces" / "team.jsonl"
+    trace_path = workspace / ".myagentrun" / "traces" / "team.jsonl"
     runtime.events.subscribe("*", JsonlTraceWriter(trace_path))
     result = await runtime.agent.run("Delegate analysis and review of hello.py.")
     trace = TraceRun.from_file(trace_path)
@@ -57,7 +57,7 @@ async def _run(workspace: Path, examples: Path) -> None:
 def main() -> None:
     """Prepare an isolated workspace and run the team demonstration."""
     examples = Path(__file__).resolve().parent
-    with TemporaryDirectory(prefix="minidsh-team-") as directory:
+    with TemporaryDirectory(prefix="myagentrun-team-") as directory:
         workspace = Path(directory)
         (workspace / "hello.py").write_text(
             'def greet(name: str) -> str:\n    return f"Hello, {name}!"\n', encoding="utf-8"

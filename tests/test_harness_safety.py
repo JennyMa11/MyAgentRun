@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters.file_backend import BackendFileTool
-from minidsh.adapters.models import ScriptedModel
-from minidsh.adapters.streaming import IncrementalRedactor
-from minidsh.application.agent_loop import AgentLoop
-from minidsh.composition import RuntimeComponents, RuntimeOptions, build_local_runtime
-from minidsh.configured_runtime import build_configured_runtime
-from minidsh.context import FullHistoryContext, RetrievalContext
-from minidsh.context.snapshots import SnapshotRetriever
-from minidsh.domain import (
+from myagentrun.adapters.file_backend import BackendFileTool
+from myagentrun.adapters.models import ScriptedModel
+from myagentrun.adapters.streaming import IncrementalRedactor
+from myagentrun.application.agent_loop import AgentLoop
+from myagentrun.composition import RuntimeComponents, RuntimeOptions, build_local_runtime
+from myagentrun.configured_runtime import build_configured_runtime
+from myagentrun.context import FullHistoryContext, RetrievalContext
+from myagentrun.context.snapshots import SnapshotRetriever
+from myagentrun.domain import (
     AgentBudget,
     JsonValue,
     Message,
@@ -26,18 +26,18 @@ from minidsh.domain import (
     ToolObservation,
     ToolStatus,
 )
-from minidsh.domain.harness import ApprovalChoice
-from minidsh.gui.session import GuiSession
-from minidsh.infrastructure import WorkspaceSandbox
-from minidsh.ports import ToolExecutor
-from minidsh.runtime import EventBus
-from minidsh.runtime.approvals import ApprovalBroker
-from minidsh.runtime.catalog import PluginCatalog, PluginSpec, ValuePlugin
-from minidsh.runtime.hooks import HookRegistry
-from minidsh.runtime.plugins import PluginError, PluginManager, PluginManifest
-from minidsh.runtime.services import ServiceRegistry
-from minidsh.tools.builtin import PatchFileTool
-from minidsh.tools.runtime import PermissionPolicy, ToolError, ToolRegistry, ToolRuntime
+from myagentrun.domain.harness import ApprovalChoice
+from myagentrun.gui.session import GuiSession
+from myagentrun.infrastructure import WorkspaceSandbox
+from myagentrun.ports import ToolExecutor
+from myagentrun.runtime import EventBus
+from myagentrun.runtime.approvals import ApprovalBroker
+from myagentrun.runtime.catalog import PluginCatalog, PluginSpec, ValuePlugin
+from myagentrun.runtime.hooks import HookRegistry
+from myagentrun.runtime.plugins import PluginError, PluginManager, PluginManifest
+from myagentrun.runtime.services import ServiceRegistry
+from myagentrun.tools.builtin import PatchFileTool
+from myagentrun.tools.runtime import PermissionPolicy, ToolError, ToolRegistry, ToolRuntime
 
 
 def test_incremental_redaction_holds_split_credentials() -> None:
@@ -309,12 +309,14 @@ async def test_model_cannot_overwrite_session_facts(tmp_path: Path) -> None:
         workspace=tmp_path, model=ScriptedModel([]), options=RuntimeOptions(allow_write=True)
     )
     observation = await runtime.tools.execute(
-        ToolCall("corrupt", "write_file", {"path": ".minidsh/traces/run.jsonl", "content": "fake"}),
+        ToolCall(
+            "corrupt", "write_file", {"path": ".myagentrun/traces/run.jsonl", "content": "fake"}
+        ),
         "run",
         1,
     )
     assert observation.error is not None
-    assert not (tmp_path / ".minidsh/traces/run.jsonl").exists()
+    assert not (tmp_path / ".myagentrun/traces/run.jsonl").exists()
 
 
 @pytest.mark.asyncio

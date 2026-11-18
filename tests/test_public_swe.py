@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters.models import ScriptedModel
-from minidsh.benchmark.public_swe import (
+from myagentrun.adapters.models import ScriptedModel
+from myagentrun.benchmark.public_swe import (
     PublicSelection,
     PublicStudyError,
     _capture_patch,
@@ -20,9 +20,9 @@ from minidsh.benchmark.public_swe import (
     run_study,
     summarize,
 )
-from minidsh.domain import ModelResponse, TokenUsage
-from minidsh.infrastructure.containers import DockerHost, DockerSandbox
-from minidsh.infrastructure.process import CommandDeniedError, CommandPolicy, ProcessResult
+from myagentrun.domain import ModelResponse, TokenUsage
+from myagentrun.infrastructure.containers import DockerHost, DockerSandbox
+from myagentrun.infrastructure.process import CommandDeniedError, CommandPolicy, ProcessResult
 
 
 class RecordingHost:
@@ -334,8 +334,8 @@ async def test_sweep_stops_after_aggregate_overrun_and_keeps_all_tasks(
         del args, kwargs
         return True
 
-    monkeypatch.setattr("minidsh.benchmark.public_swe._repository", repository)
-    monkeypatch.setattr("minidsh.benchmark.public_swe.verify_patch", verify)
+    monkeypatch.setattr("myagentrun.benchmark.public_swe._repository", repository)
+    monkeypatch.setattr("myagentrun.benchmark.public_swe.verify_patch", verify)
     report = await run_study(
         selection,
         sources=tmp_path / "sources",

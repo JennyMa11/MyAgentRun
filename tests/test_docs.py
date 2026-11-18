@@ -21,9 +21,9 @@ from typing import cast
 
 import pytest
 
-import minidsh
-from minidsh.benchmark.ablation import CONTEXT_VARIANTS
-from minidsh.composition import RuntimeOptions, _build_context
+import myagentrun
+from myagentrun.benchmark.ablation import CONTEXT_VARIANTS
+from myagentrun.composition import RuntimeOptions, _build_context
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 README = REPO_ROOT / "README.md"
@@ -63,8 +63,8 @@ def test_the_version_is_declared_in_four_places_and_they_agree() -> None:
     """
     in_pyproject = tomllib.loads(_read(PYPROJECT))["project"]["version"]
 
-    assert in_pyproject == minidsh.__version__, (
-        f"pyproject says {in_pyproject}, package says {minidsh.__version__}"
+    assert in_pyproject == myagentrun.__version__, (
+        f"pyproject says {in_pyproject}, package says {myagentrun.__version__}"
     )
     assert _declared_version_in_readme() == in_pyproject, (
         f"README says {_declared_version_in_readme()}, project says {in_pyproject}"

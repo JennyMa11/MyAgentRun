@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters.memory import SQLiteMemoryStore
-from minidsh.adapters.memory_evidence import JsonMemoryEvidenceSource
-from minidsh.application.context_assembly import ContextAssembly
-from minidsh.context import FullHistoryContext
-from minidsh.domain import JsonValue, Message, Role, ToolCall, ToolStatus
-from minidsh.domain.memory import (
+from myagentrun.adapters.memory import SQLiteMemoryStore
+from myagentrun.adapters.memory_evidence import JsonMemoryEvidenceSource
+from myagentrun.application.context_assembly import ContextAssembly
+from myagentrun.context import FullHistoryContext
+from myagentrun.domain import JsonValue, Message, Role, ToolCall, ToolStatus
+from myagentrun.domain.memory import (
     MemoryEntry,
     MemoryEvidence,
     MemoryEvidenceFile,
@@ -23,12 +23,12 @@ from minidsh.domain.memory import (
     MemoryKind,
     MemoryStatus,
 )
-from minidsh.ports.memory import MemoryEvidenceError
-from minidsh.runtime import EventBus
-from minidsh.runtime.memory import MemoryService, RetrieveMemoryTool
-from minidsh.runtime.memory_maintenance import memory_maintenance_tools
-from minidsh.tools import PermissionPolicy, ToolRegistry, ToolRuntime
-from minidsh.tools.runtime import ToolError
+from myagentrun.ports.memory import MemoryEvidenceError
+from myagentrun.runtime import EventBus
+from myagentrun.runtime.memory import MemoryService, RetrieveMemoryTool
+from myagentrun.runtime.memory_maintenance import memory_maintenance_tools
+from myagentrun.tools import PermissionPolicy, ToolRegistry, ToolRuntime
+from myagentrun.tools.runtime import ToolError
 
 pytestmark = pytest.mark.integration
 

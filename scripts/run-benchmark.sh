@@ -12,13 +12,13 @@ cd "$(dirname "$0")/.."
 MANIFEST="${1:-benchmarks/core/manifest.json}"
 OUTPUT="${2:-benchmark-results/core.json}"
 
-uv run mini-dsh benchmark "$MANIFEST" \
+uv run myagentrun benchmark "$MANIFEST" \
   --output "$OUTPUT" \
   --markdown "${OUTPUT%.json}.md" \
   --allow-write \
   --allow-shell \
-  --input-usd-per-million "${MINIDSH_INPUT_USD_PER_MILLION:-3.0}" \
-  --output-usd-per-million "${MINIDSH_OUTPUT_USD_PER_MILLION:-15.0}" \
+  --input-usd-per-million "${MYAGENTRUN_INPUT_USD_PER_MILLION:-3.0}" \
+  --output-usd-per-million "${MYAGENTRUN_OUTPUT_USD_PER_MILLION:-15.0}" \
   --verify-command python
 
 echo "wrote ${OUTPUT}, ${OUTPUT%.json}.jsonl, ${OUTPUT%.json}.md"

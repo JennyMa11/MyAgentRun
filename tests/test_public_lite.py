@@ -10,18 +10,18 @@ from types import TracebackType
 
 import pytest
 
-from minidsh.benchmark import public_lite
-from minidsh.benchmark.public_lite import (
+from myagentrun.benchmark import public_lite
+from myagentrun.benchmark.public_lite import (
     LiteSelection,
     PublicLiteError,
     evaluate_output,
     fixture_files,
 )
-from minidsh.benchmark.public_swe import UsageModel
-from minidsh.domain import ModelCallError, ModelRequest, ModelResponse, TokenUsage
-from minidsh.infrastructure.containers import ContainerResources, DockerSandbox
-from minidsh.infrastructure.process import ProcessResult
-from minidsh.ports import Model
+from myagentrun.benchmark.public_swe import UsageModel
+from myagentrun.domain import ModelCallError, ModelRequest, ModelResponse, TokenUsage
+from myagentrun.infrastructure.containers import ContainerResources, DockerSandbox
+from myagentrun.infrastructure.process import ProcessResult
+from myagentrun.ports import Model
 
 
 @pytest.mark.asyncio

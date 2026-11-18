@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import JsonSessionStore
-from minidsh.domain import Message, Role, RunResult, RunStatus, TokenUsage
-from minidsh.infrastructure import SandboxViolationError, WorkspaceSandbox
+from myagentrun.adapters import JsonSessionStore
+from myagentrun.domain import Message, Role, RunResult, RunStatus, TokenUsage
+from myagentrun.infrastructure import SandboxViolationError, WorkspaceSandbox
 
 
 @pytest.mark.asyncio
@@ -71,6 +71,6 @@ async def test_session_redacts_credentials_on_disk(tmp_path: Path) -> None:
     )
     store = JsonSessionStore(tmp_path)
     await store.save(result)
-    saved = (tmp_path / ".minidsh/sessions/secret.json").read_text()
+    saved = (tmp_path / ".myagentrun/sessions/secret.json").read_text()
     assert "private-value" not in saved
     assert "[REDACTED]" in saved

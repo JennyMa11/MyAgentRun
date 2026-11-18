@@ -4,6 +4,10 @@
 
 ## 未发布
 
+- 项目更名为 MyAgentRun，Python 包和 CLI 统一为 `myagentrun`，开发入口为
+  `myagentrun-work`；配置、环境变量、插件入口组与运行目录同步更名。
+  迁移边界见 [ADR 0031](docs/adr/0031-myagentrun-rename.md)；历史评测证据保留原名。
+
 - 新增 hard 套件的两策略 Context 对照入口，交替任务内的策略顺序，保留重复采样、
   失败样本和完整 Trace；不改动核心 Loop 或既有 BenchmarkRunner。
 - 新增连续终端会话和独立本地 GUI，支持恢复、取消与显式运行设置。
@@ -137,7 +141,7 @@
 - `OpenAICompatibleModel` 强化：429/5xx/超时/网络错误有限重试与指数退避（上限可配，`sleep` 可注入以便测试）；HTTP 失败分类为 `auth_error` / `rate_limited` / `server_error` / `client_error`；`ModelAdapterError` 带 `code` 与 `retryable`，失败分类不再依赖解析错误文本。
 - Prompt cache 支持：解析 `usage.prompt_tokens_details.cached_tokens`，`TokenUsage` 新增 `cached_input_tokens` 与 `billable_input_tokens`。
 
-**评测层（新包 `minidsh/evaluation/`）**
+**评测层（新包 `myagentrun/evaluation/`）**
 
 - `tracefile.py`：JSONL Trace 的类型化只读视图，按 step 分组，导出状态、失败原因、Token 与成本。Trace 是唯一事实源，其余全部是可再生成的视图。
 - `taxonomy.py`：9 个失败类别归并成 4 层（`success` / `harness` / `agent` / `environment`），带证据链的 `FailureDiagnosis`。决策顺序先测无歧义的结构化事实，再对模型做推断；"被绕过的拒绝不算病因"与"`context_miss` 需要两半证据"是两条关键规则。
@@ -158,8 +162,8 @@
 **CLI**
 
 - `benchmark` / `ablation` 新增 `--provider` / `--model-profile` / `--model` / `--endpoint` / `--api-key-env` / `--temperature` / `--max-attempts` / `--repeat` / `--allow-unpriced` / `--cached-input-usd-per-million`。
-- `mini-dsh report <json>`：离线重渲染已保存报告并附 Pareto 分析，不重新调用模型。
-- `mini-dsh trace replay <jsonl>` 与 `mini-dsh trace diff <a> <b>`，均支持 `--json`。
+- `myagentrun report <json>`：离线重渲染已保存报告并附 Pareto 分析，不重新调用模型。
+- `myagentrun trace replay <jsonl>` 与 `myagentrun trace diff <a> <b>`，均支持 `--json`。
 
 **文档**
 
@@ -171,7 +175,7 @@
 - `ModelPricing` 新增 `cached_input_usd_per_million`；未声明时回落到未缓存费率，**与旧成本模型逐位等价**（`0.1.0` 的全部成本读数不变）。
 - `AgentLoop` 在 `model_call_completed` 中发布 `duration_ms` 与 `cached_input_tokens`，`run_finished` 中发布 `latency` 分解；`RunResult` 新增 `latency` 字段。
 - `BenchmarkRunner` 不再删除旧 Trace 文件，改为由 writer 截断；Trace 路径在 `--repeat > 1` 时为 `<task>.run<N>.jsonl`（第 0 次仍为 `<task>.jsonl`，保持既有产物路径）。
-- 配置层新增 `MINIDSH_CACHED_INPUT_USD_PER_MILLION`。
+- 配置层新增 `MYAGENTRUN_CACHED_INPUT_USD_PER_MILLION`。
 - 环境变量 `--api-key-env` 默认值由固定字符串改为"沿用 profile 声明的变量"。
 
 ### Fixed
@@ -180,8 +184,8 @@
 - 旧 Trace 未被清理时会与新运行的事件交错；现在由 writer 在首次写入时截断。
 - **失败的模型调用其耗时此前不计入任何一层**，于是被算进 `harness_ms` 残差——provider 越慢越像"harness 慢"，正好与延迟分解的目的相反。修复覆盖两处：Loop 现在把失败与被取消的调用也计入 `model_ms` / `model_calls`；`latency_from_trace` 改为优先采用 `run_finished` 上由 Loop 记录的权威分解，只在旧 Trace 缺该字段时才回退到按事件求和（失败的调用没有 `model_call_completed` 事件，按事件求和必然丢时间）。这个缺陷是在用本地 `ollama` profile 做端到端探测时暴露的：连接失败的 3.5 秒被全部记到了 harness 头上。
 
-- **`.env.example` 的说明与运行时行为不符**：文件头写"Copy to .env"，但运行时从不读取 `.env`（没有 dotenv 依赖，也没有任何代码加载它），而 `.gitignore` 又特意为 `.env` 开了豁免——三者互相矛盾。现已改成诚实的说明：这是一份**变量名对照表**，不是会被自动加载的文件，并给出可用配方 `set -a; source .env; set +a`。同时写明凭据**不接受**来自 `minidsh.toml`（该文件会被提交与共享，密钥写进去就是等着泄露；写进去会被直接拒绝，而不是被静默忽略）。
-- `MINIDSH_API_KEY_ENV`（"我的密钥在哪个变量里"）此前只对命名 profile 生效，在 `--endpoint` 直连路径上被静默忽略——同一件事的含义取决于用了哪个 flag。现在两条路径一致，优先级为 `--api-key-env` > `MINIDSH_API_KEY_ENV` > 默认 `MINIDSH_API_KEY`。
+- **`.env.example` 的说明与运行时行为不符**：文件头写"Copy to .env"，但运行时从不读取 `.env`（没有 dotenv 依赖，也没有任何代码加载它），而 `.gitignore` 又特意为 `.env` 开了豁免——三者互相矛盾。现已改成诚实的说明：这是一份**变量名对照表**，不是会被自动加载的文件，并给出可用配方 `set -a; source .env; set +a`。同时写明凭据**不接受**来自 `myagentrun.toml`（该文件会被提交与共享，密钥写进去就是等着泄露；写进去会被直接拒绝，而不是被静默忽略）。
+- `MYAGENTRUN_API_KEY_ENV`（"我的密钥在哪个变量里"）此前只对命名 profile 生效，在 `--endpoint` 直连路径上被静默忽略——同一件事的含义取决于用了哪个 flag。现在两条路径一致，优先级为 `--api-key-env` > `MYAGENTRUN_API_KEY_ENV` > 默认 `MYAGENTRUN_API_KEY`。
 
 ### Tests
 
@@ -225,7 +229,7 @@
 
 **配置**
 
-- 分层优先级 `CLI > MINIDSH_* 环境变量 > minidsh.toml > 安全默认值`，可打印每个字段的来源。
+- 分层优先级 `CLI > MYAGENTRUN_* 环境变量 > myagentrun.toml > 安全默认值`，可打印每个字段的来源。
 - 类型转换失败显式报错，未知或越界字段被拒绝；`max_seconds` 作为 `max_duration_seconds` 的兼容别名。
 
 **Benchmark 与消融**

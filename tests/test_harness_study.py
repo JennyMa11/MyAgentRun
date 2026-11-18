@@ -11,15 +11,15 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from minidsh.adapters import (
+from myagentrun.adapters import (
     JsonlTraceWriter,
     ModelAdapterError,
     OpenAICompatibleModel,
     ScriptedModel,
 )
-from minidsh.benchmark import harness_runner
-from minidsh.benchmark.harness_report import digest, score_row, study_report, trajectory_checks
-from minidsh.benchmark.harness_study import (
+from myagentrun.benchmark import harness_runner
+from myagentrun.benchmark.harness_report import digest, score_row, study_report, trajectory_checks
+from myagentrun.benchmark.harness_study import (
     ACCEPTANCE_CASES,
     CRITICAL,
     InputAdmissionModel,
@@ -29,11 +29,11 @@ from minidsh.benchmark.harness_study import (
     study_options,
     study_schedule,
 )
-from minidsh.benchmark.public_lite import LiteSelection
-from minidsh.benchmark.public_swe import PublicStudyError
-from minidsh.composition import RuntimeComponents, RuntimeOptions, build_local_runtime
-from minidsh.context import BudgetContext, FullHistoryContext
-from minidsh.domain import (
+from myagentrun.benchmark.public_lite import LiteSelection
+from myagentrun.benchmark.public_swe import PublicStudyError
+from myagentrun.composition import RuntimeComponents, RuntimeOptions, build_local_runtime
+from myagentrun.context import BudgetContext, FullHistoryContext
+from myagentrun.domain import (
     AgentBudget,
     Event,
     JsonValue,
@@ -49,11 +49,11 @@ from minidsh.domain import (
     ToolStatus,
     estimate_tokens,
 )
-from minidsh.evaluation.tracefile import TraceRecord, TraceRun
-from minidsh.infrastructure import ProcessResult, SandboxViolationError, WorkspaceSandbox
-from minidsh.runtime import EventBus
-from minidsh.tools import ToolRegistry, ToolRuntime, WriteFileTool
-from minidsh.tools.runtime import PermissionPolicy, ToolError
+from myagentrun.evaluation.tracefile import TraceRecord, TraceRun
+from myagentrun.infrastructure import ProcessResult, SandboxViolationError, WorkspaceSandbox
+from myagentrun.runtime import EventBus
+from myagentrun.tools import ToolRegistry, ToolRuntime, WriteFileTool
+from myagentrun.tools.runtime import PermissionPolicy, ToolError
 
 
 class UnusedHost:
@@ -234,7 +234,7 @@ async def test_wall_budget_stops_next_step_with_deterministic_clock(
             clock[0] = 5.0
             return "safe"
 
-    monkeypatch.setattr("minidsh.application.agent_loop.time.monotonic", lambda: clock[0])
+    monkeypatch.setattr("myagentrun.application.agent_loop.time.monotonic", lambda: clock[0])
     (tmp_path / "README.md").write_text("safe")
     runtime = build_local_runtime(
         workspace=tmp_path,

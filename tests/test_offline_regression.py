@@ -18,13 +18,13 @@ def test_experiment_environment_does_not_inherit_credentials_or_profiles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-placeholder")
-    monkeypatch.setenv("MINIDSH_MODEL_PROFILE", "deepseek")
+    monkeypatch.setenv("MYAGENTRUN_MODEL_PROFILE", "deepseek")
     monkeypatch.setenv("HTTPS_PROXY", "http://example.invalid")
     monkeypatch.setenv("PATH", "/test/bin")
     environment = offline.clean_environment()
     assert environment["PATH"] == "/test/bin"
     assert "DEEPSEEK_API_KEY" not in environment
-    assert "MINIDSH_MODEL_PROFILE" not in environment
+    assert "MYAGENTRUN_MODEL_PROFILE" not in environment
     assert "HTTPS_PROXY" not in environment
 
 

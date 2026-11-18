@@ -11,14 +11,14 @@ from typing import Any
 
 import pytest
 
-from minidsh.adapters import ScriptedModel
-from minidsh.adapters.mlx import MLXAdapter, parse_action
-from minidsh.application.local_policy import LocalPlanState, RepetitionGuard
-from minidsh.benchmark.ablation import LOCAL_FIRST_VARIANTS
-from minidsh.cli import _build_parser, _resolve
-from minidsh.composition import RuntimeOptions, build_local_runtime
-from minidsh.context import BudgetContext
-from minidsh.domain import (
+from myagentrun.adapters import ScriptedModel
+from myagentrun.adapters.mlx import MLXAdapter, parse_action
+from myagentrun.application.local_policy import LocalPlanState, RepetitionGuard
+from myagentrun.benchmark.ablation import LOCAL_FIRST_VARIANTS
+from myagentrun.cli import _build_parser, _resolve
+from myagentrun.composition import RuntimeOptions, build_local_runtime
+from myagentrun.context import BudgetContext
+from myagentrun.domain import (
     ErrorInfo,
     Message,
     ModelRequest,
@@ -30,10 +30,16 @@ from minidsh.domain import (
     ToolObservation,
     ToolStatus,
 )
-from minidsh.infrastructure import WorkspaceSandbox
-from minidsh.runtime import EventBus
-from minidsh.tools import FindSymbolTool, ListFilesTool, SearchCodeTool, ToolRegistry, ToolRuntime
-from minidsh.tools.runtime import PermissionPolicy
+from myagentrun.infrastructure import WorkspaceSandbox
+from myagentrun.runtime import EventBus
+from myagentrun.tools import (
+    FindSymbolTool,
+    ListFilesTool,
+    SearchCodeTool,
+    ToolRegistry,
+    ToolRuntime,
+)
+from myagentrun.tools.runtime import PermissionPolicy
 
 
 def test_budget_context_keeps_complete_tool_round_and_pinned_facts() -> None:

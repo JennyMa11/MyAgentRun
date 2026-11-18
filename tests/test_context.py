@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from minidsh.context import (
+from myagentrun.context import (
     BudgetContext,
     FullHistoryContext,
     RepositoryRetriever,
@@ -12,7 +12,7 @@ from minidsh.context import (
     SlidingWindowContext,
     SummaryCompactionContext,
 )
-from minidsh.domain import Message, Role, ToolCall
+from myagentrun.domain import Message, Role, ToolCall
 
 
 def _history(count: int) -> tuple[Message, ...]:
