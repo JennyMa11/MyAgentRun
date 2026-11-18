@@ -25,6 +25,7 @@ from myagentrun.domain.models import (
     ToolStatus,
     estimate_tokens,
 )
+from myagentrun.domain.observability import PhoenixConfig
 from myagentrun.domain.redaction import REDACTED, SECRET_KEYS, redact_text, redact_value
 
 __all__ = [
@@ -43,6 +44,7 @@ __all__ = [
     "ModelPricing",
     "ModelRequest",
     "ModelResponse",
+    "PhoenixConfig",
     "Role",
     "RunResult",
     "RunStatus",
