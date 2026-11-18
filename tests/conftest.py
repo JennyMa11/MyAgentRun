@@ -9,16 +9,16 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import JsonlTraceWriter
-from minidsh.application.agent_loop import AgentLoop
-from minidsh.domain import JsonValue, Message, RunResult
-from minidsh.ports import EventStream
+from myagentrun.adapters import JsonlTraceWriter
+from myagentrun.application.agent_loop import AgentLoop
+from myagentrun.domain import JsonValue, Message, RunResult
+from myagentrun.ports import EventStream
 
 
 @pytest.fixture(autouse=True)
 def isolate_global_credentials(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
-        "minidsh.cli.default_credentials_path", lambda: tmp_path / "global" / "credentials.toml"
+        "myagentrun.cli.default_credentials_path", lambda: tmp_path / "global" / "credentials.toml"
     )
 
 

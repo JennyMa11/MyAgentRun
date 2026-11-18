@@ -24,41 +24,41 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from minidsh.adapters import JsonlTraceWriter, ScriptedModel
-from minidsh.adapters.file_backend import DockerFileBackend
-from minidsh.adapters.memory import SQLiteMemoryStore
-from minidsh.adapters.memory_evidence import JsonMemoryEvidenceSource
-from minidsh.adapters.models import CredentialRedactingModel, OpenAICompatibleModel
-from minidsh.benchmark.extension_matrix import ExtensionGroup, build_extension_runtime
-from minidsh.benchmark.hashes import frozen_tree_digest
-from minidsh.benchmark.public_lite import checked_image_size, seed_container
-from minidsh.benchmark.runner import BenchmarkManifest, BenchmarkRunner
-from minidsh.composition import (
+from myagentrun.adapters import JsonlTraceWriter, ScriptedModel
+from myagentrun.adapters.file_backend import DockerFileBackend
+from myagentrun.adapters.memory import SQLiteMemoryStore
+from myagentrun.adapters.memory_evidence import JsonMemoryEvidenceSource
+from myagentrun.adapters.models import CredentialRedactingModel, OpenAICompatibleModel
+from myagentrun.benchmark.extension_matrix import ExtensionGroup, build_extension_runtime
+from myagentrun.benchmark.hashes import frozen_tree_digest
+from myagentrun.benchmark.public_lite import checked_image_size, seed_container
+from myagentrun.benchmark.runner import BenchmarkManifest, BenchmarkRunner
+from myagentrun.composition import (
     RuntimeComponents,
     RuntimeEnvironment,
     RuntimeOptions,
     build_local_runtime,
 )
-from minidsh.domain import AgentBudget
-from minidsh.domain.extensions import FinishDecision
-from minidsh.domain.memory import MemoryConfig, MemoryKind, MemoryStatus, MemoryValidationError
-from minidsh.evaluation.extension_comparison import (
+from myagentrun.domain import AgentBudget
+from myagentrun.domain.extensions import FinishDecision
+from myagentrun.domain.memory import MemoryConfig, MemoryKind, MemoryStatus, MemoryValidationError
+from myagentrun.evaluation.extension_comparison import (
     ComparisonRun,
     MetricComparison,
     compare_extension_groups,
 )
-from minidsh.evaluation.harness_metrics import (
+from myagentrun.evaluation.harness_metrics import (
     HarnessMetrics,
     MetricRate,
     ScoringEvidence,
     aggregate_harness_metrics,
     score_harness,
 )
-from minidsh.evaluation.tracefile import TraceError, TraceRun
-from minidsh.infrastructure import CommandPolicy
-from minidsh.infrastructure.containers import ContainerResources, DockerHost, DockerSandbox
-from minidsh.ports.memory import MemoryEvidenceError, MemoryStoreError
-from minidsh.runtime.hooks import HookRegistry
+from myagentrun.evaluation.tracefile import TraceError, TraceRun
+from myagentrun.infrastructure import CommandPolicy
+from myagentrun.infrastructure.containers import ContainerResources, DockerHost, DockerSandbox
+from myagentrun.ports.memory import MemoryEvidenceError, MemoryStoreError
+from myagentrun.runtime.hooks import HookRegistry
 
 ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL = "benchmarks/extension_v1/manifest.json"
@@ -589,7 +589,7 @@ async def run_offline(snapshot: Path, output: Path) -> None:  # noqa: PLR0915 - 
                     shutil.copytree(
                         workspace,
                         artifacts,
-                        ignore=shutil.ignore_patterns("__pycache__", ".minidsh"),
+                        ignore=shutil.ignore_patterns("__pycache__", ".myagentrun"),
                         symlinks=True,
                     )
 
@@ -1315,9 +1315,9 @@ def report(  # noqa: PLR0915 - preserve the declared cohort while deriving all r
             name: digest((ROOT / name).read_bytes())
             for name in (
                 "scripts/extension_acceptance.py",
-                "src/minidsh/evaluation/harness_metrics.py",
-                "src/minidsh/evaluation/extension_comparison.py",
-                "src/minidsh/evaluation/tracefile.py",
+                "src/myagentrun/evaluation/harness_metrics.py",
+                "src/myagentrun/evaluation/extension_comparison.py",
+                "src/myagentrun/evaluation/tracefile.py",
             )
         },
         "declared_runs": len(rows),

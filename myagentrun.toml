@@ -1,0 +1,13 @@
+# OpenAI-compatible transport; the credential lives in the ignored private store.
+[myagentrun]
+model_profile = "openai"
+model = "glm-5.3-flash"
+endpoint = "https://moerouter.com/v1/chat/completions"
+api_key_env = "MYAGENTRUN_MOEROUTER_API_KEY"
+
+# High but bounded per-task budget for development and repository repair.
+max_tokens = 1000000
+max_steps = 200
+max_tool_calls = 400
+max_seconds = 3600
+context_input_budget = 65536

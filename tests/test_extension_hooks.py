@@ -10,16 +10,16 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from minidsh.adapters import ScriptedModel
-from minidsh.composition import (
+from myagentrun.adapters import ScriptedModel
+from myagentrun.composition import (
     RuntimeComponents,
     RuntimeOptions,
     RuntimeServices,
     build_local_runtime,
     plugin_runtime,
 )
-from minidsh.configured_runtime import build_configured_runtime
-from minidsh.domain import (
+from myagentrun.configured_runtime import build_configured_runtime
+from myagentrun.domain import (
     AgentBudget,
     Event,
     JsonValue,
@@ -35,7 +35,7 @@ from minidsh.domain import (
     ToolObservation,
     ToolStatus,
 )
-from minidsh.domain.extensions import (
+from myagentrun.domain.extensions import (
     BudgetView,
     ControlledCaller,
     FinishAction,
@@ -43,11 +43,11 @@ from minidsh.domain.extensions import (
     FinishProposal,
     HookView,
 )
-from minidsh.runtime import EventBus, PluginManager, PluginManifest, ServiceRegistry
-from minidsh.runtime.catalog import PluginCatalog, PluginSpec
-from minidsh.runtime.hooks import HookRegistry
-from minidsh.tools import PermissionPolicy
-from minidsh.tools.runtime import ToolError
+from myagentrun.runtime import EventBus, PluginManager, PluginManifest, ServiceRegistry
+from myagentrun.runtime.catalog import PluginCatalog, PluginSpec
+from myagentrun.runtime.hooks import HookRegistry
+from myagentrun.tools import PermissionPolicy
+from myagentrun.tools.runtime import ToolError
 
 
 def view() -> HookView:

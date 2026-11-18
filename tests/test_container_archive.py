@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.infrastructure.containers import DockerHost
+from myagentrun.infrastructure.containers import DockerHost
 
 pytestmark = pytest.mark.integration
 

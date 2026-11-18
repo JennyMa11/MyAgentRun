@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import ScriptedModel
-from minidsh.application.agent_loop import AgentLoopFactory
-from minidsh.composition import (
+from myagentrun.adapters import ScriptedModel
+from myagentrun.application.agent_loop import AgentLoopFactory
+from myagentrun.composition import (
     RuntimeComponents,
     RuntimeOptions,
     RuntimeServices,
@@ -16,12 +16,12 @@ from minidsh.composition import (
     build_local_runtime,
     plugin_runtime,
 )
-from minidsh.context import FullHistoryContext
-from minidsh.domain import ModelResponse, RunResult, RunStatus, ToolCall, ToolStatus
-from minidsh.infrastructure import ProcessResult, WorkspaceSandbox, default_opener
-from minidsh.ports import AgentDependencies, AgentRunner
-from minidsh.runtime import EventBus, PluginManifest, ServiceError, ServiceRegistry
-from minidsh.tools import PermissionDecision, PermissionPolicy, ReadFileTool, WriteFileTool
+from myagentrun.context import FullHistoryContext
+from myagentrun.domain import ModelResponse, RunResult, RunStatus, ToolCall, ToolStatus
+from myagentrun.infrastructure import ProcessResult, WorkspaceSandbox, default_opener
+from myagentrun.ports import AgentDependencies, AgentRunner
+from myagentrun.runtime import EventBus, PluginManifest, ServiceError, ServiceRegistry
+from myagentrun.tools import PermissionDecision, PermissionPolicy, ReadFileTool, WriteFileTool
 
 
 class DenyEverything:

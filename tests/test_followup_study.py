@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from minidsh.benchmark.followup import (
+from myagentrun.benchmark.followup import (
     FollowupProtocol,
     followup_schedule,
     latency_reconciled,
@@ -18,8 +18,8 @@ from minidsh.benchmark.followup import (
     row_options,
     summarize_rows,
 )
-from minidsh.benchmark.harness_study import StudyProtocol
-from minidsh.domain import LatencyBreakdown
+from myagentrun.benchmark.harness_study import StudyProtocol
+from myagentrun.domain import LatencyBreakdown
 
 PROTOCOL = Path("benchmarks/harness_study/v2/protocol.json")
 

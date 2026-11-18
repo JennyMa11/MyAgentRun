@@ -8,14 +8,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from minidsh.cli import main
-from minidsh.domain import JsonValue
-from minidsh.evaluation.harness_metrics import (
+from myagentrun.cli import main
+from myagentrun.domain import JsonValue
+from myagentrun.evaluation.harness_metrics import (
     ScoringEvidence,
     aggregate_harness_metrics,
     score_harness,
 )
-from minidsh.evaluation.tracefile import TraceRecord, TraceRun
+from myagentrun.evaluation.tracefile import TraceRecord, TraceRun
 
 
 def _event(name: str, step: int = 1, **data: JsonValue) -> TraceRecord:

@@ -4,6 +4,10 @@
 
 ## 未发布
 
+- 项目更名为 MyAgentRun，Python 包和 CLI 统一为 `myagentrun`，开发入口为
+  `myagentrun-work`；配置、环境变量、插件入口组与运行目录同步更名。
+  迁移边界见 [ADR 0031](docs/adr/0031-myagentrun-rename.md)；历史评测证据保留原名。
+
 - 新增 hard 套件的两策略 Context 对照入口，交替任务内的策略顺序，保留重复采样、
   失败样本和完整 Trace；不改动核心 Loop 或既有 BenchmarkRunner。
 - 新增连续终端会话和独立本地 GUI，支持恢复、取消与显式运行设置。

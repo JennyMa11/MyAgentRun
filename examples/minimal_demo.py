@@ -1,4 +1,4 @@
-"""Minimal end-to-end Mini-dsh demo.
+"""Minimal end-to-end MyAgentRun demo.
 
 It runs the complete ``Observe -> Plan -> Act -> Execute -> Observe -> Finish``
 loop against a throwaway workspace with no network access and no API key:
@@ -14,9 +14,9 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from minidsh.adapters import JsonlTraceWriter, ScriptedModel
-from minidsh.composition import RuntimeOptions, build_local_runtime
-from minidsh.domain import ModelPricing, ModelResponse, RunStatus, TokenUsage, ToolCall
+from myagentrun.adapters import JsonlTraceWriter, ScriptedModel
+from myagentrun.composition import RuntimeOptions, build_local_runtime
+from myagentrun.domain import ModelPricing, ModelResponse, RunStatus, TokenUsage, ToolCall
 
 BROKEN_SOURCE = """def add(left: int, right: int) -> int:
     return left - right
@@ -73,7 +73,7 @@ def scripted_model() -> ScriptedModel:
 
 async def main() -> int:
     """Run the demo and return a process exit code."""
-    with tempfile.TemporaryDirectory(prefix="minidsh-demo-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="myagentrun-demo-") as temporary:
         workspace = Path(temporary)
         (workspace / "calc.py").write_text(BROKEN_SOURCE, encoding="utf-8")
         (workspace / "test_calc.py").write_text(UNIT_TEST, encoding="utf-8")

@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import JsonlTraceWriter, ScriptedModel
-from minidsh.collaboration import build_multi_agent_runtime
-from minidsh.composition import RuntimeOptions
-from minidsh.domain import (
+from myagentrun.adapters import JsonlTraceWriter, ScriptedModel
+from myagentrun.collaboration import build_multi_agent_runtime
+from myagentrun.composition import RuntimeOptions
+from myagentrun.domain import (
     AgentBudget,
     Event,
     JsonValue,
@@ -22,7 +22,7 @@ from minidsh.domain import (
     ToolCall,
     ToolStatus,
 )
-from minidsh.evaluation import TraceRun, build_replay
+from myagentrun.evaluation import TraceRun, build_replay
 
 
 def _delegation(*tasks: str) -> ModelResponse:

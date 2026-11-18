@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import ScriptedModel
-from minidsh.benchmark import (
+from myagentrun.adapters import ScriptedModel
+from myagentrun.benchmark import (
     CONTEXT_VARIANTS,
     PERMISSION_VARIANTS,
     STANDARD_VARIANTS,
@@ -27,8 +27,8 @@ from minidsh.benchmark import (
     VariantRegistry,
     VariantReport,
 )
-from minidsh.composition import LocalRuntime, RuntimeOptions, build_local_runtime
-from minidsh.domain import ModelResponse, ToolCall
+from myagentrun.composition import LocalRuntime, RuntimeOptions, build_local_runtime
+from myagentrun.domain import ModelResponse, ToolCall
 
 
 def _metrics(task_id: str, *, success: bool, cost: float = 0.001) -> TaskMetrics:

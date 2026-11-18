@@ -17,6 +17,7 @@ build/
 !.env.example
 
 # Runtime artifacts
+.myagentrun/
 .minidsh/
 artifacts/
 traces/
@@ -31,3 +32,6 @@ benchmark-results/
 
 # Local agent workspace state
 .workbuddy-ai/
+
+# MyAgentRun private credentials
+/.myagentrun/credentials.toml

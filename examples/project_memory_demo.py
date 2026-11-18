@@ -12,14 +12,14 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from minidsh.adapters import ScriptedModel
-from minidsh.composition import RuntimeOptions, plugin_runtime
-from minidsh.domain import AgentBudget, ModelResponse, RunStatus, ToolCall, ToolStatus
-from minidsh.domain.memory import MemoryConfig
+from myagentrun.adapters import ScriptedModel
+from myagentrun.composition import RuntimeOptions, plugin_runtime
+from myagentrun.domain import AgentBudget, ModelResponse, RunStatus, ToolCall, ToolStatus
+from myagentrun.domain.memory import MemoryConfig
 
 
 async def main() -> None:
-    with TemporaryDirectory(prefix="minidsh-memory-demo-") as directory:
+    with TemporaryDirectory(prefix="myagentrun-memory-demo-") as directory:
         root = Path(directory)
         workspace, private = root / "workspace", root / "private"
         workspace.mkdir()

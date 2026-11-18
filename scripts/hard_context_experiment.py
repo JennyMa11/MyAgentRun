@@ -19,19 +19,19 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
-from minidsh.adapters import CredentialRedactingModel
-from minidsh.adapters.profiles import BUILTIN_PROFILES, build_provider_model
-from minidsh.benchmark.ablation import AblationReport, HarnessVariant, Runner, VariantReport
-from minidsh.benchmark.runner import (
+from myagentrun.adapters import CredentialRedactingModel
+from myagentrun.adapters.profiles import BUILTIN_PROFILES, build_provider_model
+from myagentrun.benchmark.ablation import AblationReport, HarnessVariant, Runner, VariantReport
+from myagentrun.benchmark.runner import (
     BenchmarkManifest,
     BenchmarkReport,
     BenchmarkRunner,
     BenchmarkTask,
 )
-from minidsh.cli import task_options
-from minidsh.composition import LocalRuntime, RuntimeOptions, build_local_runtime
-from minidsh.domain import ModelPricing
-from minidsh.evaluation import TraceRun, build_replay
+from myagentrun.cli import task_options
+from myagentrun.composition import LocalRuntime, RuntimeOptions, build_local_runtime
+from myagentrun.domain import ModelPricing
+from myagentrun.evaluation import TraceRun, build_replay
 
 PROJECT = Path(__file__).resolve().parent.parent
 VARIANTS = (

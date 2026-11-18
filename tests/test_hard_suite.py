@@ -29,8 +29,8 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.benchmark import BenchmarkManifest, BenchmarkTask
-from minidsh.benchmark.runner import _apply_overlay
+from myagentrun.benchmark import BenchmarkManifest, BenchmarkTask
+from myagentrun.benchmark.runner import _apply_overlay
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HARD = REPO_ROOT / "benchmarks" / "hard"

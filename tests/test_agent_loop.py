@@ -8,9 +8,9 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from minidsh.adapters import ModelAdapterError
-from minidsh.application import AgentLoop
-from minidsh.domain import (
+from myagentrun.adapters import ModelAdapterError
+from myagentrun.application import AgentLoop
+from myagentrun.domain import (
     AgentBudget,
     ContextView,
     Event,
@@ -27,8 +27,8 @@ from minidsh.domain import (
     ToolObservation,
     ToolStatus,
 )
-from minidsh.evaluation import TraceRun, build_replay
-from minidsh.evaluation.tracefile import TraceRecord
+from myagentrun.evaluation import TraceRun, build_replay
+from myagentrun.evaluation.tracefile import TraceRecord
 
 
 @dataclass

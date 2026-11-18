@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import ScriptedModel
-from minidsh.adapters.mcp import McpPlugin, McpToolSpec
-from minidsh.composition import RuntimeOptions, RuntimeServices, plugin_runtime
-from minidsh.domain import JsonValue, ToolCall, ToolStatus
-from minidsh.tools import ToolError
+from myagentrun.adapters import ScriptedModel
+from myagentrun.adapters.mcp import McpPlugin, McpToolSpec
+from myagentrun.composition import RuntimeOptions, RuntimeServices, plugin_runtime
+from myagentrun.domain import JsonValue, ToolCall, ToolStatus
+from myagentrun.tools import ToolError
 
 
 class FakeMcpClient:

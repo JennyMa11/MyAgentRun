@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from minidsh.domain import Event
-from minidsh.runtime import (
+from myagentrun.domain import Event
+from myagentrun.runtime import (
     EventBus,
     PluginError,
     PluginManager,

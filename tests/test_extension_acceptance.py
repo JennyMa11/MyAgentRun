@@ -15,9 +15,14 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters.memory import SQLiteMemoryStore
-from minidsh.adapters.memory_evidence import JsonMemoryEvidenceSource
-from minidsh.domain.memory import MemoryEntry, MemoryEvidenceFile, MemoryEvidenceGrant, MemoryKind
+from myagentrun.adapters.memory import SQLiteMemoryStore
+from myagentrun.adapters.memory_evidence import JsonMemoryEvidenceSource
+from myagentrun.domain.memory import (
+    MemoryEntry,
+    MemoryEvidenceFile,
+    MemoryEvidenceGrant,
+    MemoryKind,
+)
 
 pytestmark = pytest.mark.integration
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,7 +35,7 @@ def cli(*arguments: str) -> subprocess.CompletedProcess[str]:
         cwd=ROOT,
         env={
             "PATH": str(Path(sys.executable).parent) + os.pathsep + os.environ.get("PATH", ""),
-            "MINIDSH_PROVIDER": "must_not_be_used",
+            "MYAGENTRUN_PROVIDER": "must_not_be_used",
         },
         capture_output=True,
         text=True,

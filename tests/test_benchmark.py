@@ -11,17 +11,17 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import ModelAdapterError, ScriptedModel
-from minidsh.benchmark import (
+from myagentrun.adapters import ModelAdapterError, ScriptedModel
+from myagentrun.benchmark import (
     BenchmarkError,
     BenchmarkManifest,
     BenchmarkReport,
     BenchmarkRunner,
     BenchmarkTask,
 )
-from minidsh.composition import LocalRuntime, RuntimeOptions, build_local_runtime
-from minidsh.domain import ModelRequest, ModelResponse, ToolCall
-from minidsh.evaluation import TraceRun
+from myagentrun.composition import LocalRuntime, RuntimeOptions, build_local_runtime
+from myagentrun.domain import ModelRequest, ModelResponse, ToolCall
+from myagentrun.evaluation import TraceRun
 
 
 @pytest.mark.e2e

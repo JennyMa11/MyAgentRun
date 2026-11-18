@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 
-from minidsh.domain.memory import (
+from myagentrun.domain.memory import (
     MemoryEntry,
     MemoryEvidence,
     MemoryEvidenceKind,

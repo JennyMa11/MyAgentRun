@@ -1,0 +1,139 @@
+{
+  "schema_version": "1.0",
+  "official_commit": "02e7a74ffd0b707aab73d203fe87bdc7c76afc8e",
+  "task_repo_commit": "3d07b464b7b311a0cbfb5ed5b2d8a3b96f84a33d",
+  "environment": "custom_native_arm64",
+  "context_input_budget": 65536,
+  "model_transport": "sse",
+  "model_timeout_seconds": 300,
+  "max_output_tokens": 16384,
+  "max_stream_bytes": 33554432,
+  "total_tokens": 20000000,
+  "task_tokens": 1000000,
+  "max_steps": 200,
+  "max_tool_calls": 400,
+  "max_seconds": 3600,
+  "tasks": [
+    {
+      "instance_id": "django__django-12497",
+      "repo": "django/django",
+      "base_commit": "a4881f5e5d7ee38b7e83301331a0b4962845ef8a",
+      "task_digest": "sha256:29ede10ba54788befa6bca54aa496c6cdc6b3f9609db224ac5ad87ae0f33c96f"
+    },
+    {
+      "instance_id": "django__django-16046",
+      "repo": "django/django",
+      "base_commit": "ec13e801b820614ff374cb0046092caab8d67249",
+      "task_digest": "sha256:099f6a0772e44703465ff1c83b77c792b9b717a07032f83e0fbdce6846ecb105"
+    },
+    {
+      "instance_id": "django__django-12284",
+      "repo": "django/django",
+      "base_commit": "c5e373d48cbdd923575956fed477b63d66d9603f",
+      "task_digest": "sha256:acefc2cb8dc957a331d6c06667634d378140c6ee573836caa83fbd9dafdde8e8"
+    },
+    {
+      "instance_id": "django__django-16139",
+      "repo": "django/django",
+      "base_commit": "d559cb02da30f74debbb1fc3a46de0df134d2d80",
+      "task_digest": "sha256:3896e24d4da135fb0b0b1d910f735bd7c163bcbe7a04a792d86ce1e0129a0d56"
+    },
+    {
+      "instance_id": "django__django-11133",
+      "repo": "django/django",
+      "base_commit": "879cc3da6249e920b8d54518a0ae06de835d7373",
+      "task_digest": "sha256:0e8e4942996f93f83500be7fabfc1bc6e8cfea682e680f6aa3f919f8dedfe4b3"
+    },
+    {
+      "instance_id": "django__django-13933",
+      "repo": "django/django",
+      "base_commit": "42e8cf47c7ee2db238bf91197ea398126c546741",
+      "task_digest": "sha256:271bf28e9be59a1fab2eafbf513b908cc026601e4157aa646b9e9086607727dd"
+    },
+    {
+      "instance_id": "django__django-12589",
+      "repo": "django/django",
+      "base_commit": "895f28f9cbed817c00ab68770433170d83132d90",
+      "task_digest": "sha256:3f16e9aff2fd1d1412f1ac1f6e6bad4db3875b8f60bdd960567d2a88fa33c7a5"
+    },
+    {
+      "instance_id": "django__django-11583",
+      "repo": "django/django",
+      "base_commit": "60dc957a825232fdda9138e2f8878b2ca407a7c9",
+      "task_digest": "sha256:07821ea27b020987d3d487484db67e76a300f2c3f11d331c0266a3d8a8c38067"
+    },
+    {
+      "instance_id": "pallets__flask-4992",
+      "repo": "pallets/flask",
+      "base_commit": "4c288bc97ea371817199908d0d9b12de9dae327e",
+      "task_digest": "sha256:ef943f20f71da97385419d8d0428f0c86f5fbe6548094e1ae3285b44f2d86617"
+    },
+    {
+      "instance_id": "pallets__flask-4045",
+      "repo": "pallets/flask",
+      "base_commit": "d8c37f43724cd9fb0870f77877b7c4c7e38a19e0",
+      "task_digest": "sha256:79698efb88199d0e05b8511bd35574343281fe88f328b3abb25786325cad6f25"
+    },
+    {
+      "instance_id": "pytest-dev__pytest-9359",
+      "repo": "pytest-dev/pytest",
+      "base_commit": "e2ee3144ed6e241dea8d96215fcdca18b3892551",
+      "task_digest": "sha256:6100a88f58112e68c15e6c3ebc60999e9e601c7a36b0e24f8754d7fdbb56a3bd"
+    },
+    {
+      "instance_id": "pytest-dev__pytest-6116",
+      "repo": "pytest-dev/pytest",
+      "base_commit": "e670ff76cbad80108bde9bab616b66771b8653cf",
+      "task_digest": "sha256:7d84e34a2f23d14597dd37ab29a4235b09e1129ff3dcf323eedf2c103f5f7dc1"
+    },
+    {
+      "instance_id": "pytest-dev__pytest-5692",
+      "repo": "pytest-dev/pytest",
+      "base_commit": "29e336bd9bf87eaef8e2683196ee1975f1ad4088",
+      "task_digest": "sha256:367faefd585f0c401ea7bcd2ccda34fd4ac5b9862fb0f9904e411d30b069bca6"
+    },
+    {
+      "instance_id": "pytest-dev__pytest-5227",
+      "repo": "pytest-dev/pytest",
+      "base_commit": "2051e30b9b596e944524ccb787ed20f9f5be93e3",
+      "task_digest": "sha256:308c21d9cc6cd832674ac38bcb3184099a3705d03fe07934194b71ef046c67e0"
+    },
+    {
+      "instance_id": "sympy__sympy-23262",
+      "repo": "sympy/sympy",
+      "base_commit": "fdc707f73a65a429935c01532cd3970d3355eab6",
+      "task_digest": "sha256:c5fcb85d8777d8b4397417a56830994ce5b08083b4fe5d382ebecb6a9cbb68a9"
+    },
+    {
+      "instance_id": "sympy__sympy-15346",
+      "repo": "sympy/sympy",
+      "base_commit": "9ef28fba5b4d6d0168237c9c005a550e6dc27d81",
+      "task_digest": "sha256:e38a3d4c2d9839187a3f85b764b3ffc759069484c611abfd55c03a293f988e31"
+    },
+    {
+      "instance_id": "sympy__sympy-23117",
+      "repo": "sympy/sympy",
+      "base_commit": "c5cef2499d6eed024b0db5c792d6ec7c53baa470",
+      "task_digest": "sha256:b93b1e4bc94fe6431cf11c9278bed1908764a3ab1b1c8367520f21f7b859bf8d"
+    },
+    {
+      "instance_id": "sympy__sympy-19254",
+      "repo": "sympy/sympy",
+      "base_commit": "e0ef1da13e2ab2a77866c05246f73c871ca9388c",
+      "task_digest": "sha256:eb1a7c1b0761579c11a182effff87a4ebe2db5be44e84939258f3281a4097608"
+    },
+    {
+      "instance_id": "sympy__sympy-15308",
+      "repo": "sympy/sympy",
+      "base_commit": "fb59d703e6863ed803c98177b59197b5513332e9",
+      "task_digest": "sha256:dfb06b6a657ad4ca26c28ab4852f8fcb778871b89ce521543e66d8f541c85681"
+    },
+    {
+      "instance_id": "sympy__sympy-20442",
+      "repo": "sympy/sympy",
+      "base_commit": "1abbc0ac3e552cb184317194e5d5c5b9dd8fb640",
+      "task_digest": "sha256:17d8423db2fae625d45df98345751b1eccd3cafaee82c7452e8bd1bbce2337a2"
+    }
+  ],
+  "verification_timeout_seconds": 900
+}

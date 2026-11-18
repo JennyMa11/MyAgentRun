@@ -5,7 +5,7 @@ from typing import cast
 
 import pytest
 
-from minidsh.evaluation.extension_comparison import ComparisonRun, compare_extension_groups
+from myagentrun.evaluation.extension_comparison import ComparisonRun, compare_extension_groups
 
 CASES = tuple(f"case_{index}" for index in range(6))
 GROUPS = ("Baseline", "A", "B", "C", "D")

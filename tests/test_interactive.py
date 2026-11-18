@@ -13,11 +13,11 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import ModelProfile, ScriptedModel
-from minidsh.cli import main
-from minidsh.composition import LocalRuntime, RuntimeOptions, build_local_runtime
-from minidsh.domain import AgentBudget, ModelRequest, ModelResponse, Role, ToolCall
-from minidsh.interactive import InteractiveChat
+from myagentrun.adapters import ModelProfile, ScriptedModel
+from myagentrun.cli import main
+from myagentrun.composition import LocalRuntime, RuntimeOptions, build_local_runtime
+from myagentrun.domain import AgentBudget, ModelRequest, ModelResponse, Role, ToolCall
+from myagentrun.interactive import InteractiveChat
 
 
 def _input(monkeypatch: pytest.MonkeyPatch, lines: list[str]) -> None:
@@ -83,9 +83,9 @@ def test_chat_keeps_follow_ups_and_clear_starts_fresh(
     _chat(tmp_path)
     assert [m.content for m in model.requests[1].messages[1:]] == ["one", "first", "two"]
     assert [m.content for m in model.requests[2].messages[1:]] == ["three"]
-    traces = list((tmp_path / ".minidsh/traces").glob("*.jsonl"))
+    traces = list((tmp_path / ".myagentrun/traces").glob("*.jsonl"))
     assert len(traces) == 3
-    assert len(list((tmp_path / ".minidsh/sessions").glob("*.json"))) == 3
+    assert len(list((tmp_path / ".myagentrun/sessions").glob("*.json"))) == 3
     assert "second" in capsys.readouterr().out
 
 
@@ -114,7 +114,7 @@ def test_chat_displays_progress_and_does_not_grant_write(
     assert "Thinking" not in output
     events = [
         json.loads(line)
-        for path in (tmp_path / ".minidsh/traces").glob("*.jsonl")
+        for path in (tmp_path / ".myagentrun/traces").glob("*.jsonl")
         for line in path.read_text().splitlines()
     ]
     assert any(event["name"] == "model_call_started" for event in events)
@@ -196,7 +196,7 @@ def test_chat_resume_restores_history(
     _model(monkeypatch, [ModelResponse(content="remember this")])
     _input(monkeypatch, ["one", "/exit"])
     _chat(tmp_path)
-    run_id = next((tmp_path / ".minidsh/sessions").glob("*.json")).stem
+    run_id = next((tmp_path / ".myagentrun/sessions").glob("*.json")).stem
     model = _model(monkeypatch, [ModelResponse(content="remembered")])
     _input(monkeypatch, ["two", "/exit"])
     _chat(tmp_path, "--resume", run_id)
@@ -218,7 +218,9 @@ def test_cancelled_turn_returns_to_prompt(
     monkeypatch.setattr(ScriptedModel, "from_file", lambda _path: model)
     _input(monkeypatch, ["cancel me", "continue", "/exit"])
     _chat(tmp_path)
-    records = [json.loads(p.read_text()) for p in (tmp_path / ".minidsh/sessions").glob("*.json")]
+    records = [
+        json.loads(p.read_text()) for p in (tmp_path / ".myagentrun/sessions").glob("*.json")
+    ]
     assert {r["status"] for r in records} == {"cancelled", "finished"}
     assert any(
         m.role is Role.USER and m.content == "cancel me" for m in model.requests[-1].messages
@@ -232,9 +234,9 @@ def test_missing_credentials_returns_to_prompt(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
-    monkeypatch.delenv("MINIDSH_API_KEY_ENV", raising=False)
-    monkeypatch.delenv("MINIDSH_MODEL_PROFILE", raising=False)
-    monkeypatch.delenv("MINIDSH_MODEL_ENDPOINT", raising=False)
+    monkeypatch.delenv("MYAGENTRUN_API_KEY_ENV", raising=False)
+    monkeypatch.delenv("MYAGENTRUN_MODEL_PROFILE", raising=False)
+    monkeypatch.delenv("MYAGENTRUN_MODEL_ENDPOINT", raising=False)
     monkeypatch.setattr(getpass, "getpass", lambda _prompt: (_ for _ in ()).throw(EOFError()))
     _input(monkeypatch, ["hello", "/help", "/exit"])
     with pytest.raises(SystemExit) as exc:
@@ -243,7 +245,7 @@ def test_missing_credentials_returns_to_prompt(
     out = capsys.readouterr().out
     assert "DEEPSEEK_API_KEY" in out
     assert "/clear" in out
-    assert not (tmp_path / ".minidsh/traces").exists()
+    assert not (tmp_path / ".myagentrun/traces").exists()
 
 
 def test_multiline_and_invalid_resume_keep_the_conversation(
@@ -336,7 +338,7 @@ def test_interactive_harness_reads_patches_and_runs_tests(
     assert "test: passed" in out
     traces = [
         json.loads(line)
-        for p in (tmp_path / ".minidsh/traces").glob("*.jsonl")
+        for p in (tmp_path / ".myagentrun/traces").glob("*.jsonl")
         for line in p.read_text().splitlines()
     ]
     test_events = [
@@ -632,7 +634,7 @@ def test_key_entry_stays_in_memory_and_never_appears_in_output(
     assert chat.run() == 0
     assert received == [secret]
     assert secret not in capsys.readouterr().out
-    for path in (tmp_path / ".minidsh").rglob("*"):
+    for path in (tmp_path / ".myagentrun").rglob("*"):
         if path.is_file():
             assert secret not in path.read_text()
 
@@ -701,7 +703,7 @@ def test_first_task_configures_and_saves_key_then_next_start_reuses_it(
         prompts.append(prompt)
         return secret
 
-    monkeypatch.setattr("minidsh.cli.build_provider_model", provider)
+    monkeypatch.setattr("myagentrun.cli.build_provider_model", provider)
     monkeypatch.setattr(getpass, "getpass", key_input)
     for _ in range(2):
         _input(monkeypatch, ["hello", "/exit"])
@@ -710,14 +712,14 @@ def test_first_task_configures_and_saves_key_then_next_start_reuses_it(
         assert exc.value.code == 0
     assert received == [secret, secret]
     assert len(prompts) == 1
-    credential_file = tmp_path / ".minidsh" / "credentials.toml"
+    credential_file = tmp_path / ".myagentrun" / "credentials.toml"
     assert secret in credential_file.read_text()
     output = capsys.readouterr().out
     assert "Key saved" in output
     assert "workspace config" in output
     assert secret not in output
     assert "DEEPSEEK_API_KEY" not in os.environ
-    for path in (tmp_path / ".minidsh").rglob("*"):
+    for path in (tmp_path / ".myagentrun").rglob("*"):
         if path.is_file() and path != credential_file:
             assert secret not in path.read_text()
 
@@ -732,7 +734,7 @@ def test_chat_uses_layered_credential_without_prompting(
     global_file.write_text('[credentials]\nDEEPSEEK_API_KEY = "global-key"\n')
     expected = "global-key"
     if source != "global config":
-        project_file = tmp_path / ".minidsh" / "credentials.toml"
+        project_file = tmp_path / ".myagentrun" / "credentials.toml"
         project_file.parent.mkdir()
         project_file.write_text('[credentials]\nDEEPSEEK_API_KEY = "workspace-key"\n')
         expected = "workspace-key"
@@ -751,7 +753,7 @@ def test_chat_uses_layered_credential_without_prompting(
     def unexpected_prompt(_prompt: str) -> str:
         pytest.fail("An existing credential must not prompt again")
 
-    monkeypatch.setattr("minidsh.cli.build_provider_model", provider)
+    monkeypatch.setattr("myagentrun.cli.build_provider_model", provider)
     monkeypatch.setattr(getpass, "getpass", unexpected_prompt)
     _input(monkeypatch, ["hello", "/exit"])
     with pytest.raises(SystemExit) as exc:
@@ -815,7 +817,7 @@ def test_workspace_preparation_spends_tool_budget_before_model_calls(
     assert "budget_exhausted" in capsys.readouterr().out
     events = [
         json.loads(line)
-        for path in (tmp_path / ".minidsh/traces").glob("*.jsonl")
+        for path in (tmp_path / ".myagentrun/traces").glob("*.jsonl")
         for line in path.read_text().splitlines()
     ]
     calls = [e for e in events if e["name"] == "tool_call_completed"]

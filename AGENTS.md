@@ -1,4 +1,4 @@
-# Mini-dsh 项目约束
+# MyAgentRun 项目约束
 
 本文件是仓库级开发约束。所有实现、测试、文档与自动化均须遵守；若设计需要突破约束，应先在 ADR 中记录原因、替代方案和迁移路径。
 
@@ -9,7 +9,7 @@
 
 ## 1. 项目边界
 
-- Mini-dsh 是 Coding Agent Harness / Runtime，不训练、不微调、也不内置特定模型。
+- MyAgentRun 是 Coding Agent Harness / Runtime，不训练、不微调、也不内置特定模型。
 - 核心目标是可替换、可观测、可复现地执行 `Observe -> Plan -> Act -> Execute -> Observe -> Continue | Finish`。
 - 首版只支持单 Agent、单工作区、单进程；多 Agent、分布式执行和图形界面不进入核心层。
 - Runtime 不绑定模型厂商、Shell、代码语言、向量库或 Benchmark 数据集。
@@ -160,7 +160,7 @@ cli -> application(agent loop) -> domain(contracts/events)
 ## 11. 配置与命名
 
 - 优先顺序：CLI 参数 > 环境变量 > 配置文件 > 安全默认值。
-- 环境变量统一以 `MINIDSH_` 为前缀；配置缺失时不得静默启用高权限能力。
+- 环境变量统一以 `MYAGENTRUN_` 为前缀；配置缺失时不得静默启用高权限能力。
 - 对外标识使用 `snake_case`，事件名使用过去时态或事实描述，如 `tool_call_started`。
 - 日志使用结构化字段，不把整个 Prompt、Secret 或无限长工具输出写入普通日志。
 

@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters.file_backend import BackendFileTool
-from minidsh.adapters.models import ScriptedModel
-from minidsh.adapters.streaming import IncrementalRedactor
-from minidsh.application.agent_loop import AgentLoop
-from minidsh.composition import RuntimeComponents, RuntimeOptions, build_local_runtime
-from minidsh.configured_runtime import build_configured_runtime
-from minidsh.context import FullHistoryContext, RetrievalContext
-from minidsh.context.snapshots import SnapshotRetriever
-from minidsh.domain import (
+from myagentrun.adapters.file_backend import BackendFileTool
+from myagentrun.adapters.models import ScriptedModel
+from myagentrun.adapters.streaming import IncrementalRedactor
+from myagentrun.application.agent_loop import AgentLoop
+from myagentrun.composition import RuntimeComponents, RuntimeOptions, build_local_runtime
+from myagentrun.configured_runtime import build_configured_runtime
+from myagentrun.context import FullHistoryContext, RetrievalContext
+from myagentrun.context.snapshots import SnapshotRetriever
+from myagentrun.domain import (
     AgentBudget,
     JsonValue,
     Message,
@@ -26,18 +26,18 @@ from minidsh.domain import (
     ToolObservation,
     ToolStatus,
 )
-from minidsh.domain.harness import ApprovalChoice
-from minidsh.gui.session import GuiSession
-from minidsh.infrastructure import WorkspaceSandbox
-from minidsh.ports import ToolExecutor
-from minidsh.runtime import EventBus
-from minidsh.runtime.approvals import ApprovalBroker
-from minidsh.runtime.catalog import PluginCatalog, PluginSpec, ValuePlugin
-from minidsh.runtime.hooks import HookRegistry
-from minidsh.runtime.plugins import PluginError, PluginManager, PluginManifest
-from minidsh.runtime.services import ServiceRegistry
-from minidsh.tools.builtin import PatchFileTool
-from minidsh.tools.runtime import PermissionPolicy, ToolError, ToolRegistry, ToolRuntime
+from myagentrun.domain.harness import ApprovalChoice
+from myagentrun.gui.session import GuiSession
+from myagentrun.infrastructure import WorkspaceSandbox
+from myagentrun.ports import ToolExecutor
+from myagentrun.runtime import EventBus
+from myagentrun.runtime.approvals import ApprovalBroker
+from myagentrun.runtime.catalog import PluginCatalog, PluginSpec, ValuePlugin
+from myagentrun.runtime.hooks import HookRegistry
+from myagentrun.runtime.plugins import PluginError, PluginManager, PluginManifest
+from myagentrun.runtime.services import ServiceRegistry
+from myagentrun.tools.builtin import PatchFileTool
+from myagentrun.tools.runtime import PermissionPolicy, ToolError, ToolRegistry, ToolRuntime
 
 
 def test_incremental_redaction_holds_split_credentials() -> None:
@@ -197,26 +197,62 @@ async def test_request_hook_overflow_stops_before_model(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_context_reads_are_authorized_and_budgeted(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("strategy", "lookup", "argument"),
+    [
+        ("retrieval", "search_code", "query"),
+        ("retrieval_summary", "search_code", "query"),
+        ("symbol", "find_symbol", "name"),
+    ],
+)
+async def test_context_discovery_runs_only_when_requested(
+    tmp_path: Path, strategy: str, lookup: str, argument: str
+) -> None:
+    (tmp_path / "calc.py").write_text("def add(a, b): return a + b")
+    model = ScriptedModel(
+        [
+            ModelResponse("", (ToolCall("lookup", lookup, {argument: "add"}),), "tool_calls"),
+            ModelResponse("done"),
+        ]
+    )
+    runtime = build_local_runtime(
+        workspace=tmp_path, model=model, options=RuntimeOptions(context_strategy=strategy)
+    )
+    result = await runtime.agent.run("explain add calc")
+    assert lookup in {tool.name for tool in model.requests[0].tools}
+    assert result.tool_calls == 1
+    observation = next(message for message in result.history if message.role is Role.TOOL)
+    assert "calc.py" in observation.content
+    assert "return a + b" not in observation.content
+
+
+@pytest.mark.asyncio
+async def test_discovery_limit_preserves_reads_and_resets_per_run(tmp_path: Path) -> None:
     (tmp_path / "calc.py").write_text("def add(a, b): return a + b")
     runtime = build_local_runtime(
         workspace=tmp_path,
-        model=ScriptedModel([ModelResponse("done")]),
-        options=RuntimeOptions(context_strategy="retrieval", denied_tools=frozenset({"read_file"})),
+        model=ScriptedModel([]),
+        options=RuntimeOptions(context_strategy="retrieval", denied_tools=frozenset({"search"})),
     )
-    events = []
-
-    async def collect(event):  # type: ignore[no-untyped-def]
-        events.append(event)
-
-    runtime.events.subscribe("*", collect)
-    result = await runtime.agent.run("explain add calc")
-    assert result.tool_calls == 2
-    assert any(
-        event.name == "permission_decided" and event.data.get("allowed") is False
-        for event in events
+    for index in range(40):
+        result = await runtime.tools.execute(
+            ToolCall(f"search-{index}", "search_code", {"query": "add"}), "run", index
+        )
+        assert result.status is ToolStatus.SUCCEEDED
+    limited = await runtime.tools.execute(ToolCall("limited", "list_files", {}), "run", 41)
+    assert limited.error is not None
+    assert limited.error.code == "discovery_budget_exhausted"
+    read = await runtime.tools.execute(
+        ToolCall("read", "read_file", {"path": "calc.py"}), "run", 42
     )
-    assert not any(message.name == "repo_retrieval" for message in result.history)
+    assert read.status is ToolStatus.SUCCEEDED
+    next_run = await runtime.tools.execute(ToolCall("next", "list_files", {}), "another", 1)
+    assert next_run.status is ToolStatus.SUCCEEDED
+    denied = await runtime.tools.execute(
+        ToolCall("denied", "search", {"query": "add"}), "another", 2
+    )
+    assert denied.error is not None
+    assert denied.error.code == "permission_denied"
 
 
 @pytest.mark.asyncio
@@ -309,12 +345,14 @@ async def test_model_cannot_overwrite_session_facts(tmp_path: Path) -> None:
         workspace=tmp_path, model=ScriptedModel([]), options=RuntimeOptions(allow_write=True)
     )
     observation = await runtime.tools.execute(
-        ToolCall("corrupt", "write_file", {"path": ".minidsh/traces/run.jsonl", "content": "fake"}),
+        ToolCall(
+            "corrupt", "write_file", {"path": ".myagentrun/traces/run.jsonl", "content": "fake"}
+        ),
         "run",
         1,
     )
     assert observation.error is not None
-    assert not (tmp_path / ".minidsh/traces/run.jsonl").exists()
+    assert not (tmp_path / ".myagentrun/traces/run.jsonl").exists()
 
 
 @pytest.mark.asyncio

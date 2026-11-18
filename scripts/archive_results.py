@@ -35,9 +35,9 @@ REAL_MODEL_ABLATIONS = ("stress-real-context-ablation", "stress-real-tool_output
 # the same run has two correct costs — and a cost number is only meaningful next
 # to the tariff that produced it.  The operator therefore has to state it.
 _RATE_CARD_VARS = (
-    "MINIDSH_INPUT_USD_PER_MILLION",
-    "MINIDSH_OUTPUT_USD_PER_MILLION",
-    "MINIDSH_CACHED_INPUT_USD_PER_MILLION",
+    "MYAGENTRUN_INPUT_USD_PER_MILLION",
+    "MYAGENTRUN_OUTPUT_USD_PER_MILLION",
+    "MYAGENTRUN_CACHED_INPUT_USD_PER_MILLION",
 )
 
 
@@ -100,9 +100,9 @@ def _declared_rate_card() -> dict[str, float] | None:
             return None
         rates[variable] = float(raw)
     return {
-        "input_usd_per_million": rates["MINIDSH_INPUT_USD_PER_MILLION"],
-        "output_usd_per_million": rates["MINIDSH_OUTPUT_USD_PER_MILLION"],
-        "cached_input_usd_per_million": rates["MINIDSH_CACHED_INPUT_USD_PER_MILLION"],
+        "input_usd_per_million": rates["MYAGENTRUN_INPUT_USD_PER_MILLION"],
+        "output_usd_per_million": rates["MYAGENTRUN_OUTPUT_USD_PER_MILLION"],
+        "cached_input_usd_per_million": rates["MYAGENTRUN_CACHED_INPUT_USD_PER_MILLION"],
     }
 
 
@@ -248,14 +248,14 @@ def main() -> int:
 
     # The scripted rate card is a property of the archived scripted runs, so it is
     # carried forward rather than re-read from the environment: the real-model
-    # archive uses the same MINIDSH_*_USD_PER_MILLION variables, and reading them
+    # archive uses the same MYAGENTRUN_*_USD_PER_MILLION variables, and reading them
     # here would silently re-price every committed baseline number.  To re-price
     # the baselines deliberately, remove summary.json and archive with the rates set.
     pricing = previous.get("pricing_usd_per_million") if previous else None
     if not isinstance(pricing, dict):
         pricing = {
-            "input": float(os.environ.get("MINIDSH_INPUT_USD_PER_MILLION", "3.0")),
-            "output": float(os.environ.get("MINIDSH_OUTPUT_USD_PER_MILLION", "15.0")),
+            "input": float(os.environ.get("MYAGENTRUN_INPUT_USD_PER_MILLION", "3.0")),
+            "output": float(os.environ.get("MYAGENTRUN_OUTPUT_USD_PER_MILLION", "15.0")),
         }
 
     summary: dict[str, Any] = {

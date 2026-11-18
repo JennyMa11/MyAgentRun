@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.benchmark.runner import BenchmarkManifest, BenchmarkReport, BenchmarkTask, TaskMetrics
+from myagentrun.benchmark.runner import (
+    BenchmarkManifest,
+    BenchmarkReport,
+    BenchmarkTask,
+    TaskMetrics,
+)
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts/hard_context_experiment.py"
 SPEC = importlib.util.spec_from_file_location("hard_context_experiment", SCRIPT)

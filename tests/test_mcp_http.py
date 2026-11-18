@@ -13,12 +13,12 @@ pytest.importorskip("mcp", reason="install the mcp extra for protocol integratio
 import uvicorn
 from mcp.server.fastmcp import FastMCP
 
-from minidsh.adapters import ScriptedModel
-from minidsh.adapters.mcp import McpPlugin
-from minidsh.adapters.mcp_http import HttpMcpClient
-from minidsh.composition import RuntimeOptions, RuntimeServices, plugin_runtime
-from minidsh.domain import ModelResponse, RunStatus, ToolCall
-from minidsh.infrastructure import NetworkPolicy, NetworkRule
+from myagentrun.adapters import ScriptedModel
+from myagentrun.adapters.mcp import McpPlugin
+from myagentrun.adapters.mcp_http import HttpMcpClient
+from myagentrun.composition import RuntimeOptions, RuntimeServices, plugin_runtime
+from myagentrun.domain import ModelResponse, RunStatus, ToolCall
+from myagentrun.infrastructure import NetworkPolicy, NetworkRule
 
 
 def test_http_mcp_refuses_implicit_network_access() -> None:

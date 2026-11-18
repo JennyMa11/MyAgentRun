@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "seed": "myagentrun_lite20_pipeline_v1_20261116",
+  "lite_test_population": 300,
+  "scope": "20 tasks from four pure-Python repos for end-to-end pipeline validation",
+  "method": "fixed repository quotas; SHA256(seed:instance_id) rank per repository",
+  "quotas": {
+    "django/django": 8,
+    "pallets/flask": 2,
+    "pytest-dev/pytest": 4,
+    "sympy/sympy": 6
+  },
+  "excluded_prior_smoke_ids": [
+    "pallets__flask-5014",
+    "pytest-dev__pytest-10051",
+    "sympy__sympy-20590"
+  ],
+  "model_outcomes_used_for_selection": false
+}

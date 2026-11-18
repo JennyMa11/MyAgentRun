@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters.file_backend import LocalFileBackend
-from minidsh.domain import JsonValue, ToolCall, ToolStatus
-from minidsh.runtime import EventBus
-from minidsh.runtime.skills import DiscoverSkillsTool, LoadSkillTool, SkillService
-from minidsh.tools.runtime import PermissionPolicy, ToolError, ToolRegistry, ToolRuntime
+from myagentrun.adapters.file_backend import LocalFileBackend
+from myagentrun.domain import JsonValue, ToolCall, ToolStatus
+from myagentrun.runtime import EventBus
+from myagentrun.runtime.skills import DiscoverSkillsTool, LoadSkillTool, SkillService
+from myagentrun.tools.runtime import PermissionPolicy, ToolError, ToolRegistry, ToolRuntime
 
 pytestmark = pytest.mark.integration
 

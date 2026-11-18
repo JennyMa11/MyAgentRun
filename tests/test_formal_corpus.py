@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.benchmark.formal import frozen_tree_digest
-from minidsh.benchmark.runner import BenchmarkManifest, BenchmarkTask
+from myagentrun.benchmark.formal import frozen_tree_digest
+from myagentrun.benchmark.runner import BenchmarkManifest, BenchmarkTask
 
 ROOT = Path(__file__).resolve().parent.parent / "benchmarks" / "local_formal" / "v1"
 MANIFEST = BenchmarkManifest.from_file(ROOT / "manifest.json")

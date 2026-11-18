@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import JsonlTraceWriter
-from minidsh.domain import Event, ToolCall, ToolStatus
-from minidsh.infrastructure import (
+from myagentrun.adapters import JsonlTraceWriter
+from myagentrun.domain import Event, ToolCall, ToolStatus
+from myagentrun.infrastructure import (
     CommandDeniedError,
     CommandPolicy,
     LocalCommandRunner,
@@ -20,8 +20,8 @@ from minidsh.infrastructure import (
     SandboxViolationError,
     WorkspaceSandbox,
 )
-from minidsh.runtime import EventBus
-from minidsh.tools import (
+from myagentrun.runtime import EventBus
+from myagentrun.tools import (
     PermissionPolicy,
     ReadFileTool,
     SearchTool,
@@ -293,7 +293,7 @@ async def test_search_skips_sensitive_files(tmp_path: Path) -> None:
 async def test_subprocess_receives_only_allowlisted_environment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("MINIDSH_TEST_SECRET", "super-secret-value")
+    monkeypatch.setenv("MYAGENTRUN_TEST_SECRET", "super-secret-value")
     runner = LocalCommandRunner(
         _sandbox(tmp_path), CommandPolicy(allowed_commands=frozenset({_PYTHON}))
     )
@@ -302,7 +302,7 @@ async def test_subprocess_receives_only_allowlisted_environment(
         (
             sys.executable,
             "-c",
-            "import os; print(os.environ.get('MINIDSH_TEST_SECRET', '<absent>'))",
+            "import os; print(os.environ.get('MYAGENTRUN_TEST_SECRET', '<absent>'))",
         )
     )
 

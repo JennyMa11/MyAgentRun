@@ -11,14 +11,14 @@ from typing import Any
 
 import pytest
 
-from minidsh.adapters import ScriptedModel
-from minidsh.adapters.mlx import MLXAdapter, parse_action
-from minidsh.application.local_policy import LocalPlanState, RepetitionGuard
-from minidsh.benchmark.ablation import LOCAL_FIRST_VARIANTS
-from minidsh.cli import _build_parser, _resolve
-from minidsh.composition import RuntimeOptions, build_local_runtime
-from minidsh.context import BudgetContext
-from minidsh.domain import (
+from myagentrun.adapters import ScriptedModel
+from myagentrun.adapters.mlx import MLXAdapter, parse_action
+from myagentrun.application.local_policy import LocalPlanState, RepetitionGuard
+from myagentrun.benchmark.ablation import LOCAL_FIRST_VARIANTS
+from myagentrun.cli import _build_parser, _resolve
+from myagentrun.composition import RuntimeOptions, build_local_runtime
+from myagentrun.context import BudgetContext
+from myagentrun.domain import (
     ErrorInfo,
     Message,
     ModelRequest,
@@ -30,10 +30,16 @@ from minidsh.domain import (
     ToolObservation,
     ToolStatus,
 )
-from minidsh.infrastructure import WorkspaceSandbox
-from minidsh.runtime import EventBus
-from minidsh.tools import FindSymbolTool, ListFilesTool, SearchCodeTool, ToolRegistry, ToolRuntime
-from minidsh.tools.runtime import PermissionPolicy
+from myagentrun.infrastructure import WorkspaceSandbox
+from myagentrun.runtime import EventBus
+from myagentrun.tools import (
+    FindSymbolTool,
+    ListFilesTool,
+    SearchCodeTool,
+    ToolRegistry,
+    ToolRuntime,
+)
+from myagentrun.tools.runtime import PermissionPolicy
 
 
 def test_budget_context_keeps_complete_tool_round_and_pinned_facts() -> None:
@@ -180,10 +186,12 @@ async def test_mlx_adapter_counts_prompt_and_one_format_retry() -> None:
             assert kwargs["enable_thinking"] is False
             return list(range(10 + len(messages)))
 
-    outputs = iter(("not json", '{"action":"finish","answer":"done"}'))
+    outputs = iter(("not json", '{"action":"finish","answer":"done"}', '{"goal":[]}'))
+    limits: list[object] = []
 
     def stream(*args: object, **kwargs: object) -> Any:
-        del args, kwargs
+        del args
+        limits.append(kwargs["max_tokens"])
         raw = next(outputs)
         yield SimpleNamespace(
             text=raw,
@@ -204,6 +212,13 @@ async def test_mlx_adapter_counts_prompt_and_one_format_retry() -> None:
     assert result.format_retries == 1
     assert result.inference is not None
     assert result.inference.peak_memory_gb == 2.0
+
+    summary = await adapter.complete(
+        ModelRequest(request.messages, max_output_tokens=32, purpose="context_summary")
+    )
+    assert summary.content == '{"goal":[]}'
+    assert summary.usage.total_tokens == 17
+    assert limits == [1024, 1024, 32]
 
 
 @pytest.mark.asyncio

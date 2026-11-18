@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "official_commit": "02e7a74ffd0b707aab73d203fe87bdc7c76afc8e",
+  "task_repo_commit": "3d07b464b7b311a0cbfb5ed5b2d8a3b96f84a33d",
+  "environment": "custom_native_arm64_python39",
+  "total_tokens": 3000000,
+  "task_tokens": 1000000,
+  "max_steps": 200,
+  "max_tool_calls": 400,
+  "max_seconds": 3600,
+  "tasks": [
+    {
+      "instance_id": "pallets__flask-5014",
+      "repo": "pallets/flask",
+      "base_commit": "7ee9ceb71e868944a46e1ff00b506772a53a4f1d",
+      "task_digest": "sha256:c11dfb293e8628e8a1d914e953afb322a08458dd3bc7de4421699adf016adec5"
+    },
+    {
+      "instance_id": "pytest-dev__pytest-10051",
+      "repo": "pytest-dev/pytest",
+      "base_commit": "aa55975c7d3f6c9f6d7f68accc41bb7cadf0eb9a",
+      "task_digest": "sha256:cc2f1750701248b84b0f0e5b603404b05be5c73517b5958511044e9fdffd5f34"
+    },
+    {
+      "instance_id": "sympy__sympy-20590",
+      "repo": "sympy/sympy",
+      "base_commit": "cffd4e0f86fefd4802349a9f9b19ed70934ea354",
+      "task_digest": "sha256:d286f4fb27413d745e85c29250b60f38137136a8bee77fbf667814007ce07b4a"
+    }
+  ]
+}

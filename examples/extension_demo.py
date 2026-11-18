@@ -11,12 +11,12 @@ from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from minidsh.adapters import ScriptedModel
-from minidsh.composition import RuntimeOptions, RuntimeServices, plugin_runtime
-from minidsh.domain import Message, ModelRequest, ModelResponse, Role, RunStatus
-from minidsh.domain.extensions import HookView
-from minidsh.runtime import PluginManifest, ServiceRegistry
-from minidsh.runtime.hooks import HookRegistry
+from myagentrun.adapters import ScriptedModel
+from myagentrun.composition import RuntimeOptions, RuntimeServices, plugin_runtime
+from myagentrun.domain import Message, ModelRequest, ModelResponse, Role, RunStatus
+from myagentrun.domain.extensions import HookView
+from myagentrun.runtime import PluginManifest, ServiceRegistry
+from myagentrun.runtime.hooks import HookRegistry
 
 
 class ExampleExtension:
@@ -52,7 +52,7 @@ class ExampleExtension:
 
 async def main() -> None:
     """Show pure audit and derived request injection without editing the loop."""
-    with TemporaryDirectory(prefix="minidsh-extension-") as directory:
+    with TemporaryDirectory(prefix="myagentrun-extension-") as directory:
         for inject in (False, True):
             extension = ExampleExtension(inject=inject)
             model = ScriptedModel([ModelResponse("Done.")])

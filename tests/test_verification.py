@@ -7,16 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import ScriptedModel
-from minidsh.composition import (
+from myagentrun.adapters import ScriptedModel
+from myagentrun.composition import (
     RuntimeComponents,
     RuntimeOptions,
     RuntimeServices,
     build_local_runtime,
     plugin_runtime,
 )
-from minidsh.configured_runtime import build_configured_runtime
-from minidsh.domain import (
+from myagentrun.configured_runtime import build_configured_runtime
+from myagentrun.domain import (
     AgentBudget,
     Event,
     JsonValue,
@@ -28,15 +28,15 @@ from minidsh.domain import (
     ToolObservation,
     ToolStatus,
 )
-from minidsh.domain.extensions import FinishDecision, FinishProposal, HookView
-from minidsh.domain.verification import VerificationConfig
-from minidsh.infrastructure import CommandPolicy, LocalCommandRunner, WorkspaceSandbox
-from minidsh.ports import ToolExecutor
-from minidsh.runtime import EventBus
-from minidsh.runtime.catalog import PluginCatalog, PluginSpec, ValuePlugin
-from minidsh.runtime.hooks import HookRegistry
-from minidsh.tools import RunCommandTool
-from minidsh.tools.runtime import PermissionPolicy, ToolRegistry, ToolRuntime
+from myagentrun.domain.extensions import FinishDecision, FinishProposal, HookView
+from myagentrun.domain.verification import VerificationConfig
+from myagentrun.infrastructure import CommandPolicy, LocalCommandRunner, WorkspaceSandbox
+from myagentrun.ports import ToolExecutor
+from myagentrun.runtime import EventBus
+from myagentrun.runtime.catalog import PluginCatalog, PluginSpec, ValuePlugin
+from myagentrun.runtime.hooks import HookRegistry
+from myagentrun.tools import RunCommandTool
+from myagentrun.tools.runtime import PermissionPolicy, ToolRegistry, ToolRuntime
 
 pytestmark = pytest.mark.e2e
 

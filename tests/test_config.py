@@ -7,17 +7,17 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.config import (
+from myagentrun.config import (
     ConfigError,
     environment_overrides,
     load_config_file,
     resolve_config,
 )
-from minidsh.domain import TokenUsage
+from myagentrun.domain import TokenUsage
 
 
 def _config(tmp_path: Path, body: str) -> Path:
-    path = tmp_path / "minidsh.toml"
+    path = tmp_path / "myagentrun.toml"
     path.write_text(body, encoding="utf-8")
     return path
 
@@ -34,10 +34,10 @@ def test_defaults_apply_when_no_layer_is_present() -> None:
     assert resolved.sources == {}
 
 
-def test_config_file_layer_is_read_from_the_minidsh_table(tmp_path: Path) -> None:
+def test_config_file_layer_is_read_from_the_myagentrun_table(tmp_path: Path) -> None:
     path = _config(
         tmp_path,
-        '[minidsh]\ncontext_strategy = "sliding"\nallow_write = true\nmax_steps = 7\n',
+        '[myagentrun]\ncontext_strategy = "sliding"\nallow_write = true\nmax_steps = 7\n',
     )
 
     resolved = resolve_config(config_path=path)
@@ -68,7 +68,7 @@ def test_invalid_toml_raises_config_error(tmp_path: Path) -> None:
 
 
 def test_non_table_section_is_rejected(tmp_path: Path) -> None:
-    path = _config(tmp_path, 'minidsh = "not a table"\n')
+    path = _config(tmp_path, 'myagentrun = "not a table"\n')
 
     with pytest.raises(ConfigError, match="must be a table"):
         load_config_file(path)
@@ -77,13 +77,13 @@ def test_non_table_section_is_rejected(tmp_path: Path) -> None:
 def test_environment_overrides_are_typed() -> None:
     overrides = environment_overrides(
         {
-            "MINIDSH_CONTEXT_STRATEGY": "retrieval",
-            "MINIDSH_ALLOW_WRITE": "YES",
-            "MINIDSH_ALLOW_SHELL": "off",
-            "MINIDSH_MAX_STEPS": "3",
-            "MINIDSH_MAX_TOOL_CALLS": "9",
-            "MINIDSH_MAX_SECONDS": "12.5",
-            "MINIDSH_TOOL_OUTPUT_LIMIT": "4096",
+            "MYAGENTRUN_CONTEXT_STRATEGY": "retrieval",
+            "MYAGENTRUN_ALLOW_WRITE": "YES",
+            "MYAGENTRUN_ALLOW_SHELL": "off",
+            "MYAGENTRUN_MAX_STEPS": "3",
+            "MYAGENTRUN_MAX_TOOL_CALLS": "9",
+            "MYAGENTRUN_MAX_SECONDS": "12.5",
+            "MYAGENTRUN_TOOL_OUTPUT_LIMIT": "4096",
         }
     )
 
@@ -99,18 +99,18 @@ def test_environment_overrides_are_typed() -> None:
 
 
 def test_unrecognised_environment_variables_are_ignored() -> None:
-    assert environment_overrides({"MINIDSH_UNKNOWN": "1", "PATH": "/bin"}) == {}
+    assert environment_overrides({"MYAGENTRUN_UNKNOWN": "1", "PATH": "/bin"}) == {}
 
 
 @pytest.mark.parametrize("raw", ["maybe", "", "2"])
 def test_invalid_boolean_environment_value_raises(raw: str) -> None:
     with pytest.raises(ConfigError, match="must be a boolean"):
-        environment_overrides({"MINIDSH_ALLOW_WRITE": raw})
+        environment_overrides({"MYAGENTRUN_ALLOW_WRITE": raw})
 
 
 @pytest.mark.parametrize(
     ("variable", "raw"),
-    [("MINIDSH_MAX_STEPS", "many"), ("MINIDSH_MAX_SECONDS", "soon")],
+    [("MYAGENTRUN_MAX_STEPS", "many"), ("MYAGENTRUN_MAX_SECONDS", "soon")],
 )
 def test_invalid_numeric_environment_value_raises(variable: str, raw: str) -> None:
     with pytest.raises(ConfigError, match="must be a"):
@@ -120,15 +120,15 @@ def test_invalid_numeric_environment_value_raises(variable: str, raw: str) -> No
 def test_cli_beats_environment_beats_config_beats_default(tmp_path: Path) -> None:
     path = _config(
         tmp_path,
-        '[minidsh]\ncontext_strategy = "summary"\nmax_steps = 11\ntool_output_limit = 111\n',
+        '[myagentrun]\ncontext_strategy = "summary"\nmax_steps = 11\ntool_output_limit = 111\n',
     )
 
     resolved = resolve_config(
         cli={"context_strategy": "retrieval", "tool_output_limit": 999},
         environ={
-            "MINIDSH_CONTEXT_STRATEGY": "sliding",
-            "MINIDSH_MAX_STEPS": "22",
-            "MINIDSH_TOOL_OUTPUT_LIMIT": "222",
+            "MYAGENTRUN_CONTEXT_STRATEGY": "sliding",
+            "MYAGENTRUN_MAX_STEPS": "22",
+            "MYAGENTRUN_TOOL_OUTPUT_LIMIT": "222",
         },
         config_path=path,
     )
@@ -142,7 +142,7 @@ def test_cli_beats_environment_beats_config_beats_default(tmp_path: Path) -> Non
 
 
 def test_none_cli_values_do_not_shadow_lower_layers(tmp_path: Path) -> None:
-    path = _config(tmp_path, '[minidsh]\ncontext_strategy = "summary"\n')
+    path = _config(tmp_path, '[myagentrun]\ncontext_strategy = "summary"\n')
 
     resolved = resolve_config(cli={"context_strategy": None}, config_path=path)
 
@@ -151,14 +151,14 @@ def test_none_cli_values_do_not_shadow_lower_layers(tmp_path: Path) -> None:
 
 
 def test_unknown_config_key_is_rejected(tmp_path: Path) -> None:
-    path = _config(tmp_path, "[minidsh]\nnot_a_field = 1\n")
+    path = _config(tmp_path, "[myagentrun]\nnot_a_field = 1\n")
 
     with pytest.raises(ConfigError, match="invalid effective configuration"):
         resolve_config(config_path=path)
 
 
 def test_out_of_range_config_value_is_rejected(tmp_path: Path) -> None:
-    path = _config(tmp_path, "[minidsh]\ntool_max_retries = 99\n")
+    path = _config(tmp_path, "[myagentrun]\ntool_max_retries = 99\n")
 
     with pytest.raises(ConfigError, match="invalid effective configuration"):
         resolve_config(config_path=path)
@@ -167,8 +167,8 @@ def test_out_of_range_config_value_is_rejected(tmp_path: Path) -> None:
 def test_network_rules_become_a_host_protocol_port_allowlist(tmp_path: Path) -> None:
     path = _config(
         tmp_path,
-        "[minidsh]\n\n"
-        "[[minidsh.network_rules]]\n"
+        "[myagentrun]\n\n"
+        "[[myagentrun.network_rules]]\n"
         'host = "pypi.org"\n'
         'protocol = "tcp"\n'
         "ports = [443]\n",
@@ -186,7 +186,7 @@ def test_network_rules_become_a_host_protocol_port_allowlist(tmp_path: Path) -> 
 def test_pricing_is_resolved_into_a_rate_card(tmp_path: Path) -> None:
     path = _config(
         tmp_path,
-        "[minidsh]\ninput_usd_per_million = 3.0\noutput_usd_per_million = 15.0\n",
+        "[myagentrun]\ninput_usd_per_million = 3.0\noutput_usd_per_million = 15.0\n",
     )
 
     resolved = resolve_config(config_path=path)
@@ -198,7 +198,7 @@ def test_pricing_is_resolved_into_a_rate_card(tmp_path: Path) -> None:
 def test_budget_layer_is_independent_of_runtime_options(tmp_path: Path) -> None:
     path = _config(
         tmp_path,
-        "[minidsh]\nmax_steps = 4\nmax_tokens = 500\nmax_tool_calls = 6\nmax_seconds = 30\n",
+        "[myagentrun]\nmax_steps = 4\nmax_tokens = 500\nmax_tool_calls = 6\nmax_seconds = 30\n",
     )
 
     budget = resolve_config(config_path=path).budget
@@ -210,14 +210,14 @@ def test_budget_layer_is_independent_of_runtime_options(tmp_path: Path) -> None:
 def test_named_profile_merges_below_environment_and_cli(tmp_path: Path) -> None:
     path = _config(
         tmp_path,
-        "[minidsh]\nmax_steps = 20\n"
+        "[myagentrun]\nmax_steps = 20\n"
         '[profiles.review]\ncontext_strategy = "summary"\nmax_steps = 4\n'
         'enabled_tools = ["read_file", "search"]\n',
     )
     resolved = resolve_config(
         config_path=path,
         profile="review",
-        environ={"MINIDSH_MAX_STEPS": "8"},
+        environ={"MYAGENTRUN_MAX_STEPS": "8"},
         cli={"recent_messages": 3},
     )
     assert resolved.profile == "review"
@@ -231,13 +231,15 @@ def test_named_profile_merges_below_environment_and_cli(tmp_path: Path) -> None:
 def test_profile_selection_cli_over_environment_over_file(tmp_path: Path) -> None:
     path = _config(
         tmp_path,
-        '[minidsh]\nprofile = "a"\n[profiles.a]\nmax_steps = 1\n[profiles.b]\nmax_steps = 2\n',
+        '[myagentrun]\nprofile = "a"\n[profiles.a]\nmax_steps = 1\n[profiles.b]\nmax_steps = 2\n',
     )
     assert resolve_config(config_path=path).budget.max_steps == 1
-    assert resolve_config(config_path=path, environ={"MINIDSH_PROFILE": "b"}).budget.max_steps == 2
+    assert (
+        resolve_config(config_path=path, environ={"MYAGENTRUN_PROFILE": "b"}).budget.max_steps == 2
+    )
     assert (
         resolve_config(
-            config_path=path, profile="a", environ={"MINIDSH_PROFILE": "b"}
+            config_path=path, profile="a", environ={"MYAGENTRUN_PROFILE": "b"}
         ).budget.max_steps
         == 1
     )
@@ -245,7 +247,7 @@ def test_profile_selection_cli_over_environment_over_file(tmp_path: Path) -> Non
 
 def test_unknown_profile_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="unknown configuration profile"):
-        resolve_config(config_path=_config(tmp_path, "[minidsh]\n"), profile="missing")
+        resolve_config(config_path=_config(tmp_path, "[myagentrun]\n"), profile="missing")
 
 
 def test_profiles_are_validated_even_if_not_selected(tmp_path: Path) -> None:
@@ -256,14 +258,14 @@ def test_profiles_are_validated_even_if_not_selected(tmp_path: Path) -> None:
 def test_extended_environment_options_use_json_arrays() -> None:
     resolved = resolve_config(
         environ={
-            "MINIDSH_ENABLED_TOOLS": '["read_file"]',
-            "MINIDSH_ALLOWED_COMMANDS": '["git", "python"]',
-            "MINIDSH_DENIED_TOOLS": '["git"]',
-            "MINIDSH_SLIDING_WINDOW": "7",
-            "MINIDSH_RECENT_MESSAGES": "4",
-            "MINIDSH_REFLECTION_ENABLED": "true",
-            "MINIDSH_DETAILED_TOOL_FEEDBACK": "false",
-            "MINIDSH_SYSTEM_PROMPT": "Custom instructions.",
+            "MYAGENTRUN_ENABLED_TOOLS": '["read_file"]',
+            "MYAGENTRUN_ALLOWED_COMMANDS": '["git", "python"]',
+            "MYAGENTRUN_DENIED_TOOLS": '["git"]',
+            "MYAGENTRUN_SLIDING_WINDOW": "7",
+            "MYAGENTRUN_RECENT_MESSAGES": "4",
+            "MYAGENTRUN_REFLECTION_ENABLED": "true",
+            "MYAGENTRUN_DETAILED_TOOL_FEEDBACK": "false",
+            "MYAGENTRUN_SYSTEM_PROMPT": "Custom instructions.",
         }
     )
     assert resolved.options.enabled_tools == frozenset({"read_file"})
@@ -279,7 +281,7 @@ def test_extended_environment_options_use_json_arrays() -> None:
 @pytest.mark.parametrize("raw", ["git,python", '"git"', "{}"])
 def test_invalid_environment_list_is_rejected(raw: str) -> None:
     with pytest.raises(ConfigError, match="JSON array"):
-        environment_overrides({"MINIDSH_ALLOWED_COMMANDS": raw})
+        environment_overrides({"MYAGENTRUN_ALLOWED_COMMANDS": raw})
 
 
 @pytest.mark.parametrize("permission", ["fs.write", "process.exec"])
@@ -295,7 +297,7 @@ def test_collaboration_options_are_layered_and_can_be_disabled(tmp_path: Path) -
     resolved = resolve_config(
         config_path=path,
         profile="team",
-        environ={"MINIDSH_SUBAGENT_MAX_PARALLEL": "3", "MINIDSH_SUBAGENT_MAX_SECONDS": "15"},
+        environ={"MYAGENTRUN_SUBAGENT_MAX_PARALLEL": "3", "MYAGENTRUN_SUBAGENT_MAX_SECONDS": "15"},
         cli={"multi_agent_enabled": False},
     )
     assert resolved.options.multi_agent_enabled is False
@@ -315,7 +317,7 @@ def test_invalid_collaboration_limit_is_rejected(field: str) -> None:
 def test_verification_is_explicit_fixed_configuration(tmp_path: Path) -> None:
     path = _config(
         tmp_path,
-        '[minidsh.verification]\nargv = ["python", "check.py"]\n'
+        '[myagentrun.verification]\nargv = ["python", "check.py"]\n'
         'criterion_version = "visible_v1"\ncwd = "checks"\ntimeout_seconds = 5\n',
     )
     resolved = resolve_config(config_path=path)
@@ -407,14 +409,14 @@ def test_memory_layers_can_explicitly_disable_or_replace_private_configuration(
     private = tmp_path / "private_not_created"
     path = _config(
         tmp_path,
-        f'''[minidsh.memory]
+        f'''[myagentrun.memory]
 project_id = "project_one"
 applicable_version = "v1"
 database = "{private}/memory.sqlite3"
 storage_root = "{private}"
 ''',
     )
-    disabled = resolve_config(config_path=path, environ={"MINIDSH_MEMORY": "false"})
+    disabled = resolve_config(config_path=path, environ={"MYAGENTRUN_MEMORY": "false"})
     assert disabled.options.memory is None
     assert disabled.sources["memory"] == "env"
     settings = {
@@ -424,14 +426,14 @@ storage_root = "{private}"
         "storage_root": str(private),
     }
     cli = resolve_config(
-        config_path=path, environ={"MINIDSH_MEMORY": "false"}, cli={"memory": settings}
+        config_path=path, environ={"MYAGENTRUN_MEMORY": "false"}, cli={"memory": settings}
     )
     assert cli.options.memory is not None
     assert cli.options.memory.project_id == "project_two"
     assert cli.sources["memory"] == "cli"
     assert (
         resolve_config(
-            environ={"MINIDSH_MEMORY": json.dumps(settings)}, cli={"memory": False}
+            environ={"MYAGENTRUN_MEMORY": json.dumps(settings)}, cli={"memory": False}
         ).options.memory
         is None
     )

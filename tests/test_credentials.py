@@ -9,11 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from minidsh.adapters import ScriptedModel
-from minidsh.adapters.credentials import CredentialStore, default_credentials_path
-from minidsh.composition import RuntimeOptions, build_local_runtime
-from minidsh.context.retrieval import PythonSymbolRetriever, RepositoryRetriever
-from minidsh.domain import JsonValue, ToolCall, ToolStatus
+from myagentrun.adapters import ScriptedModel
+from myagentrun.adapters.credentials import CredentialStore, default_credentials_path
+from myagentrun.composition import RuntimeOptions, build_local_runtime
+from myagentrun.context.retrieval import PythonSymbolRetriever, RepositoryRetriever
+from myagentrun.domain import JsonValue, ToolCall, ToolStatus
 
 
 def _store(tmp_path: Path) -> CredentialStore:
@@ -33,13 +33,13 @@ def _write(path: Path, values: dict[str, str]) -> None:
 def test_global_path_default_override_and_relative_rejection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv("MINIDSH_CONFIG_HOME", raising=False)
+    monkeypatch.delenv("MYAGENTRUN_CONFIG_HOME", raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    assert default_credentials_path() == tmp_path / ".config" / "minidsh" / "credentials.toml"
+    assert default_credentials_path() == tmp_path / ".config" / "myagentrun" / "credentials.toml"
     directory = tmp_path / "chosen"
-    monkeypatch.setenv("MINIDSH_CONFIG_HOME", str(directory))
+    monkeypatch.setenv("MYAGENTRUN_CONFIG_HOME", str(directory))
     assert default_credentials_path() == directory / "credentials.toml"
-    monkeypatch.setenv("MINIDSH_CONFIG_HOME", "relative")
+    monkeypatch.setenv("MYAGENTRUN_CONFIG_HOME", "relative")
     with pytest.raises(ValueError, match="absolute"):
         default_credentials_path()
 
@@ -95,7 +95,7 @@ async def test_save_preserves_other_keys_and_creates_private_ignored_file(tmp_pa
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert (
         ignore.read_text()
-        == "dist/\n\n# Mini-dsh private credentials\n/.minidsh/credentials.toml\n"
+        == "dist/\n\n# MyAgentRun private credentials\n/.myagentrun/credentials.toml\n"
     )
     traces = list((path.parent / "traces").glob("*.jsonl"))
     assert traces
@@ -108,18 +108,18 @@ async def test_save_preserves_other_keys_and_creates_private_ignored_file(tmp_pa
         assert "preserve" not in trace.read_text()
         assert "private" not in trace.read_text()
     await store.save_workspace("DEEPSEEK_API_KEY", "replacement")
-    assert ignore.read_text().count("/.minidsh/credentials.toml") == 1
+    assert ignore.read_text().count("/.myagentrun/credentials.toml") == 1
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("target", [".minidsh", ".minidsh/credentials.toml", ".gitignore"])
+@pytest.mark.parametrize("target", [".myagentrun", ".myagentrun/credentials.toml", ".gitignore"])
 async def test_save_rejects_symlinks_without_changing_external_files(
     tmp_path: Path, target: str
 ) -> None:
     store = _store(tmp_path)
     workspace = store.workspace_path.parent.parent
     outside = tmp_path / "outside"
-    if target == ".minidsh":
+    if target == ".myagentrun":
         outside.mkdir()
     else:
         outside.write_text("untouched")
@@ -137,20 +137,28 @@ async def test_save_rejects_symlinks_without_changing_external_files(
 async def test_model_file_tools_cannot_read_or_overwrite_credentials(tmp_path: Path) -> None:
     store = _store(tmp_path)
     _write(store.workspace_path, {"DEEPSEEK_API_KEY": "private-value"})
+    legacy = tmp_path / "workspace" / ".minidsh" / "private.txt"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("legacy-private-value")
     runtime = build_local_runtime(
         workspace=store.workspace_path.parent.parent,
         model=ScriptedModel([]),
         options=RuntimeOptions(allow_write=True, progressive_tools_enabled=True),
     )
     probes: tuple[tuple[str, dict[str, JsonValue]], ...] = (
-        ("read_file", {"path": ".minidsh/credentials.toml"}),
+        ("read_file", {"path": ".minidsh/private.txt"}),
         (
             "write_file",
-            {"path": ".minidsh/credentials.toml", "content": "overwrite", "overwrite": True},
+            {"path": ".minidsh/artifacts/result", "content": "overwrite"},
+        ),
+        ("read_file", {"path": ".myagentrun/credentials.toml"}),
+        (
+            "write_file",
+            {"path": ".myagentrun/credentials.toml", "content": "overwrite", "overwrite": True},
         ),
         (
             "patch_file",
-            {"path": ".minidsh/credentials.toml", "expected": "private", "replacement": "bad"},
+            {"path": ".myagentrun/credentials.toml", "expected": "private", "replacement": "bad"},
         ),
     )
     for tool, arguments in probes:
@@ -159,6 +167,7 @@ async def test_model_file_tools_cannot_read_or_overwrite_credentials(tmp_path: P
         assert observation.error is not None
         assert observation.error.code == "sandbox_violation"
         assert "private-value" not in str(observation)
+    assert legacy.read_text() == "legacy-private-value"
     assert store.resolve("DEEPSEEK_API_KEY", {}).value == "private-value"
 
 
