@@ -13,8 +13,10 @@ from dataclasses import dataclass, field, replace
 
 from myagentrun.application.local_policy import LocalPlanState, RepetitionGuard
 from myagentrun.application.session_journal import MemorySessionJournal
+from myagentrun.context.handoff import HandoffRequest, SummaryHandoff
 from myagentrun.domain import (
     AgentBudget,
+    ContextView,
     Event,
     JsonValue,
     LatencyBreakdown,
@@ -217,6 +219,7 @@ class AgentLoop:
         actual_run_id = run_id or uuid.uuid4().hex
         started = time.monotonic()
         counters = _RunCounters()
+        handoff = SummaryHandoff()
         seed, repaired = self._continue_history(prior_history)
         log = await self._journal.create(actual_run_id)
         plan = (
@@ -306,6 +309,12 @@ class AgentLoop:
                         continue
                 else:
                     context = self._context.build(log.messages(), task)
+                if "model_summary_source_indices" in context.metadata:
+                    context = await self._prepare_handoff(
+                        context, log.messages(), handoff, counters, actual_run_id, step_id, started
+                    )
+                    if self._budget_reason(counters, started, include_step=False) is not None:
+                        continue
                 await self._emit(
                     "context_built",
                     actual_run_id,
@@ -376,14 +385,7 @@ class AgentLoop:
                 response, model_duration_ms = await self._call_model(
                     request, counters, actual_run_id, step_id, started
                 )
-                call_usage = response.usage
-                if not response.usage_known:
-                    counters.unknown_usage_calls += 1
-                call_cost = self._pricing.cost_usd(call_usage)
-                counters.input_tokens += call_usage.input_tokens
-                counters.output_tokens += call_usage.output_tokens
-                counters.cached_input_tokens += call_usage.cached_input_tokens
-                counters.cost_usd += call_cost
+                call_cost = self._record_model_usage(response, counters)
                 await self._append(
                     log,
                     actual_run_id,
@@ -913,13 +915,133 @@ class AgentLoop:
                 name = "repository_map"
             await self._append(log, run_id, 0, Message(Role.SYSTEM, text, name=name))
 
-    async def _call_model(
+    def _count_request(self, request: ModelRequest) -> int:
+        counter = getattr(self._model, "count_tokens", None)
+        return (
+            counter(request.messages, request.tools)
+            if callable(counter)
+            else estimate_tokens(request.messages)
+        )
+
+    def _record_model_usage(self, response: ModelResponse, counters: _RunCounters) -> float:
+        usage = response.usage
+        if not response.usage_known:
+            counters.unknown_usage_calls += 1
+        cost = self._pricing.cost_usd(usage)
+        counters.input_tokens += usage.input_tokens
+        counters.output_tokens += usage.output_tokens
+        counters.cached_input_tokens += usage.cached_input_tokens
+        counters.cost_usd += cost
+        return cost
+
+    async def _prepare_handoff(  # noqa: PLR0913, PLR0917 -- explicit run budget and identity
+        self,
+        view: ContextView,
+        history: tuple[Message, ...],
+        state: SummaryHandoff,
+        counters: _RunCounters,
+        run_id: str,
+        step_id: int,
+        started: float,
+    ) -> ContextView:
+        limit = self._request_input_budget or 8_192
+        remaining = self._budget.max_tokens - counters.token_usage.total_tokens
+        plan = state.plan(
+            view, history, step_id, limit // 2, min(limit, remaining), self._count_request
+        )
+        if plan is not None and self._budget_reason(counters, started, include_step=False) is None:
+            output_reserve = plan.request.max_output_tokens or 0
+            input_estimate = self._count_request(plan.request)
+            if input_estimate + output_reserve <= remaining:
+                await self._generate_handoff(plan, state, counters, run_id, step_id, started)
+        context = state.apply(
+            view,
+            lambda request: self._count_request(replace(request, tools=self._tools.definitions())),
+            limit,
+        )
+        return replace(
+            context,
+            metadata={
+                **context.metadata,
+                "model_summary_attempts": state.attempts,
+                "model_summary_active": any(
+                    m.name == "context_model_summary" for m in context.messages
+                ),
+                "model_summary_trigger_estimate": limit // 2,
+            },
+        )
+
+    async def _generate_handoff(  # noqa: PLR0913, PLR0917 -- explicit run budget and identity
+        self,
+        plan: HandoffRequest,
+        state: SummaryHandoff,
+        counters: _RunCounters,
+        run_id: str,
+        step_id: int,
+        started: float,
+    ) -> None:
+        state.attempts += 1
+        state.last_attempt_step = step_id
+        await self._emit(
+            "model_call_started",
+            run_id,
+            step_id,
+            {
+                "purpose": "context_summary",
+                "summary_source_indices": list(plan.indices),
+                "estimated_input_tokens": self._count_request(plan.request),
+                "max_output_tokens": plan.request.max_output_tokens,
+            },
+        )
+        accepted = False
+        reason = "provider_error"
+        try:
+            response, duration = await self._call_model(
+                plan.request, counters, run_id, step_id, started, purpose="context_summary"
+            )
+        except Exception:
+            # _call_model already accounts known failed usage and unresolved consumption.
+            pass
+        else:
+            cost = self._record_model_usage(response, counters)
+            accepted = state.accept(response, plan)
+            reason = "accepted" if accepted else "invalid_summary_or_unknown_usage"
+            await self._emit(
+                "model_call_completed",
+                run_id,
+                step_id,
+                {
+                    "purpose": "context_summary",
+                    "finish_reason": response.finish_reason,
+                    "usage_known": response.usage_known,
+                    "input_tokens": response.usage.input_tokens,
+                    "output_tokens": response.usage.output_tokens,
+                    "cached_input_tokens": response.usage.cached_input_tokens,
+                    "duration_ms": duration,
+                    "cost_usd": cost,
+                },
+            )
+        await self._emit(
+            "context_summary_resolved",
+            run_id,
+            step_id,
+            {
+                "accepted": accepted,
+                "reason": reason,
+                "summary_source_indices": list(plan.indices),
+                "source_cursor": state.source_cursor,
+            },
+        )
+
+    async def _call_model(  # noqa: PLR0912, PLR0913 -- stream and auxiliary metering
         self,
         request: ModelRequest,
         counters: _RunCounters,
         run_id: str,
         step_id: int,
         run_started: float,
+        *,
+        purpose: str | None = None,
     ) -> tuple[ModelResponse, float]:
         """Call the provider, charging the elapsed time to the model either way.
 
@@ -932,6 +1054,8 @@ class AgentLoop:
         partial = ""
         try:
             remaining = self._budget.max_duration_seconds - (time.monotonic() - run_started)
+            if purpose == "context_summary":
+                remaining = min(remaining, 45.0)
             async with asyncio.timeout(remaining):
                 if self._streaming_enabled and isinstance(self._model, StreamingModel):
                     settled: ModelResponse | None = None
@@ -940,9 +1064,10 @@ class AgentLoop:
                         async for item in stream:
                             if item.text:
                                 partial += item.text
-                                await self._emit(
-                                    "model_text_received", run_id, step_id, {"text": item.text}
-                                )
+                                if purpose is None:
+                                    await self._emit(
+                                        "model_text_received", run_id, step_id, {"text": item.text}
+                                    )
                             if item.response is not None:
                                 if settled is not None:
                                     raise ValueError("stream returned multiple settled responses")
@@ -961,7 +1086,7 @@ class AgentLoop:
             usage = exc.usage if isinstance(exc, ModelCallError) else None
             if usage is None:
                 counters.unknown_usage_calls += 1
-            if partial:
+            if partial and purpose is None:
                 await self._emit(
                     "model_attempt_interrupted",
                     run_id,
@@ -979,6 +1104,7 @@ class AgentLoop:
                 run_id,
                 step_id,
                 {
+                    **({"purpose": purpose} if purpose is not None else {}),
                     "error": _failure_reason(exc),
                     "usage_known": usage is not None,
                     "input_tokens": usage.input_tokens if usage is not None else None,

@@ -147,6 +147,9 @@ class LocalArtifactStore:
         return destination.relative_to(self._root.parent.parent).as_posix()
 
 
+_DISCOVERY_CALL_LIMIT = 40
+
+
 class ToolRuntime:
     """Validate, authorize, execute, retry, and normalize tool calls."""
 
@@ -162,6 +165,7 @@ class ToolRuntime:
         normalize_results: bool = True,
         approvals: ApprovalProvider | None = None,
         hooks: HookRegistry | None = None,
+        discovery_tools: frozenset[str] = frozenset(),
     ) -> None:
         self._registry = registry
         self._permissions = permissions
@@ -171,6 +175,8 @@ class ToolRuntime:
         self._max_retries = max_retries
         self._normalize_results = normalize_results
         self._approvals = approvals
+        self._discovery_tools = discovery_tools
+        self._discovery_calls: dict[str, int] = {}
         self._hooks = hooks or HookRegistry()
         self._hooks.bind_events(events)
 
@@ -179,6 +185,7 @@ class ToolRuntime:
         self._approvals = provider
 
     def release_run(self, run_id: str) -> None:
+        self._discovery_calls.pop(run_id, None)
         release = getattr(self._approvals, "release", None)
         if callable(release):
             release(run_id)
@@ -344,6 +351,20 @@ class ToolRuntime:
                 "preflight_failed",
                 redact_text(str(exc)),
             )
+
+        if call.name in self._discovery_tools:
+            count = self._discovery_calls.get(run_id, 0)
+            if count >= _DISCOVERY_CALL_LIMIT:
+                return await self._reject(
+                    call,
+                    started,
+                    run_id,
+                    step_id,
+                    ToolStatus.DENIED,
+                    "discovery_budget_exhausted",
+                    "Repository discovery limit reached. Use existing results or read known files.",
+                )
+            self._discovery_calls[run_id] = count + 1
 
         await self._events.publish(
             Event(

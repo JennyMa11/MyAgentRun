@@ -143,7 +143,7 @@ class DockerSandbox:
     def __init__(
         self, host: ProcessRunner, *, image: str, resources: ContainerResources | None = None
     ) -> None:
-        if re.fullmatch(r"[a-zA-Z0-9._/:-]+@sha256:[a-f0-9]{64}", image) is None:
+        if re.fullmatch(r"(?:[a-zA-Z0-9._/:-]+@)?sha256:[a-f0-9]{64}", image) is None:
             raise ValueError("container image must be pinned by SHA-256 digest")
         self.host = host
         self.image = image

@@ -160,7 +160,8 @@ class TraceRun:
             if record.name == "context_built":
                 context = record
             elif record.name in {"model_call_completed", "model_call_failed"}:
-                model_call = record
+                if record.data.get("purpose") != "context_summary":
+                    model_call = record
             elif record.name == "tool_call_completed":
                 tool_calls.append(record)
             elif record.name == "permission_decided":

@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import Protocol
+from typing import Protocol, cast
 
 from myagentrun.context.retrieval import RetrievedChunk
 from myagentrun.context.snapshots import SnapshotRetriever
-from myagentrun.domain import ContextView, Message, Role, estimate_tokens
+from myagentrun.domain import ContextView, JsonValue, Message, Role, estimate_tokens
 from myagentrun.domain.harness import PreparedContext
 from myagentrun.ports.protocols import ContextManager
+from myagentrun.tools.results import diagnostics
 
 _MIN_SUMMARY_CHARS = 100
+_PINNED_PREFIX_LENGTH = 2
 
 
 def _pinned_indices(history: tuple[Message, ...]) -> set[int]:
@@ -201,6 +204,90 @@ class SlidingWindowContext:
         )
 
 
+_TOOL_RESULT_PRUNE_THRESHOLD = 1_200
+_DIAGNOSTIC_TAIL_CHARS = 2_000
+
+
+def _tool_result_preview(message: Message) -> tuple[Message, bool]:
+    """Shorten a tool observation without changing its protocol identity."""
+    if message.role is not Role.TOOL or len(message.content) <= _TOOL_RESULT_PRUNE_THRESHOLD:
+        return message, False
+    try:
+        body = json.loads(message.content)
+    except ValueError:
+        return message, False
+    if not isinstance(body, dict):
+        return message, False
+    result = body.get("result")
+    result = result if isinstance(result, dict) else {}
+    status = body.get("status")
+    failed = status != "succeeded" or result.get("exit_code") not in (0, None)
+    preview = {
+        "tool_call_id": message.tool_call_id,
+        "status": status,
+        "context_pruned": True,
+        **{
+            k: result[k]
+            for k in ("exit_code", "timed_out", "start_line", "end_line")
+            if k in result
+        },
+    }
+    if isinstance(result.get("path"), str):
+        preview["path"] = result["path"][:240]
+    if isinstance(result.get("argv"), list):
+        preview["command"] = " ".join(map(str, result["argv"]))[:240]
+    if isinstance(body.get("summary"), str):
+        preview["summary"] = body["summary"][:240]
+    if isinstance(body.get("artifacts"), list):
+        preview["artifacts"] = [ref for ref in body["artifacts"][:2] if isinstance(ref, str)]
+    if failed:
+        error = body.get("error")
+        if isinstance(error, dict):
+            for key in ("code", "message"):
+                if isinstance(error.get(key), str):
+                    preview[key] = error[key][:240]
+        tails = {
+            key: result[key][-_DIAGNOSTIC_TAIL_CHARS:]
+            for key in ("stdout", "stderr")
+            if isinstance(result.get(key), str)
+        }
+        prior = result.get("diagnostics")
+        existing = (
+            [line[:240] for line in prior[-2:] if isinstance(line, str)]
+            if isinstance(prior, list)
+            else []
+        )
+        newest_first: dict[str, JsonValue] = {
+            key: "\n".join(reversed(text.splitlines())) for key, text in tails.items()
+        }
+        evidence = diagnostics(newest_first, limit=2) or existing
+        if not evidence:
+            evidence = [text.strip()[-240:] for text in tails.values() if text.strip()]
+        preview["diagnostics"] = evidence
+    content = json.dumps(preview, ensure_ascii=False, separators=(",", ":"))
+    return (
+        (replace(message, content=content), failed)
+        if len(content) < len(message.content)
+        else (message, False)
+    )
+
+
+def _prune_answered_tool_results(
+    history: tuple[Message, ...], pinned: set[int], last_assistant: int
+) -> tuple[tuple[Message, ...], dict[int, bool]]:
+    pruned: dict[int, bool] = {}
+    messages = list(history)
+    for index in range(last_assistant):
+        if index in pinned:
+            continue
+        original = history[index]
+        preview, failed = _tool_result_preview(original)
+        if preview is not original:
+            messages[index] = preview
+            pruned[index] = failed
+    return tuple(messages), pruned
+
+
 @dataclass(frozen=True, slots=True)
 class SummaryCompactionContext:
     """Compact older messages into a bounded, deterministic summary."""
@@ -209,6 +296,8 @@ class SummaryCompactionContext:
     summary_max_chars: int = 4_000
     name: str = "summary_compaction"
     version: str = "1.0"
+    prune_tool_results: bool = False
+    model_summary: bool = False
 
     def __post_init__(self) -> None:
         if self.recent_messages < 1 or self.summary_max_chars < _MIN_SUMMARY_CHARS:
@@ -217,14 +306,43 @@ class SummaryCompactionContext:
 
     def build(self, history: tuple[Message, ...], task: str) -> ContextView:
         del task
+        pinned_indices = _pinned_indices(history)
+        pruned: dict[int, bool] = {}
+        last_assistant = -1
+        if self.prune_tool_results:
+            last_assistant = next(
+                (i for i in reversed(range(len(history))) if history[i].role is Role.ASSISTANT),
+                -1,
+            )
+            history, pruned = _prune_answered_tool_results(history, pinned_indices, last_assistant)
+        metadata: dict[str, JsonValue] = {}
+        if self.prune_tool_results:
+            metadata["pruned_tool_result_indices"] = cast("list[JsonValue]", list(pruned))
         if len(history) <= self.recent_messages + 2:
-            return ContextView(history, self.name, self.version, estimate_tokens(history))
+            return ContextView(
+                history, self.name, self.version, estimate_tokens(history), metadata=metadata
+            )
 
         start = _window_start(history, len(history) - self.recent_messages, floor=2)
-        pinned_indices = _pinned_indices(history)
-        omitted = tuple(
-            message for index, message in enumerate(history[:start]) if index not in pinned_indices
-        )
+        if (
+            self.prune_tool_results
+            and last_assistant >= _PINNED_PREFIX_LENGTH
+            and any(message.role is Role.TOOL for message in history[last_assistant + 1 :])
+        ):
+            start = min(start, last_assistant)
+        omitted_indices = [index for index in range(start) if index not in pinned_indices]
+        if self.model_summary:
+            metadata["model_summary_source_indices"] = cast(
+                "list[JsonValue]", omitted_indices.copy()
+            )
+            reasoning_chars = sum(len(message.reasoning_content or "") for message in history)
+            metadata["model_summary_pressure_estimate"] = (
+                estimate_tokens(history) + (reasoning_chars + 3) // 4
+            )
+        # Recent known failures get space before routine old output fills the summary.
+        if pruned:
+            omitted_indices.sort(key=lambda index: (0, -index) if pruned.get(index) else (1, index))
+        omitted = tuple(history[index] for index in omitted_indices)
         fragments: list[str] = []
         remaining = self.summary_max_chars
         for message in omitted:
@@ -253,6 +371,7 @@ class SummaryCompactionContext:
             estimate_tokens(selected),
             omitted_messages=len(omitted),
             metadata={
+                **metadata,
                 "recent_messages": self.recent_messages,
                 "summary_source_messages": len(omitted),
                 "window_extended_for_tool_round": len(history) - start - self.recent_messages,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Literal
 
 type JsonValue = bool | int | float | str | list[JsonValue] | dict[str, JsonValue] | None
 
@@ -269,6 +270,8 @@ class ModelRequest:
 
     messages: tuple[Message, ...]
     tools: tuple[ToolDefinition, ...] = ()
+    max_output_tokens: int | None = None
+    purpose: Literal["agent", "context_summary"] = "agent"
 
 
 @dataclass(frozen=True, slots=True)

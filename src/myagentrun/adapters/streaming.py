@@ -151,13 +151,14 @@ class _State:
         )
 
 
-async def stream_completion(
+async def stream_completion(  # noqa: PLR0913 - explicit bounded transport configuration
     *,
     endpoint: str,
     payload: dict[str, object],
     secret: str,
     timeout_seconds: float,
     transport: httpx.AsyncBaseTransport | None = None,
+    max_bytes: int = _MAX_BYTES,
 ) -> AsyncIterator[StreamEvent]:
     """No retries after emitting content; close the HTTP connection on every exit."""
     state = _State()
@@ -178,7 +179,7 @@ async def stream_completion(
             response.raise_for_status()
             async for line in response.aiter_lines():
                 size += len(line.encode())
-                if size > _MAX_BYTES:
+                if size > max_bytes:
                     raise ModelCallError(
                         "stream exceeded output limit", code="output_limit", usage=state.usage
                     )

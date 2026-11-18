@@ -186,10 +186,12 @@ async def test_mlx_adapter_counts_prompt_and_one_format_retry() -> None:
             assert kwargs["enable_thinking"] is False
             return list(range(10 + len(messages)))
 
-    outputs = iter(("not json", '{"action":"finish","answer":"done"}'))
+    outputs = iter(("not json", '{"action":"finish","answer":"done"}', '{"goal":[]}'))
+    limits: list[object] = []
 
     def stream(*args: object, **kwargs: object) -> Any:
-        del args, kwargs
+        del args
+        limits.append(kwargs["max_tokens"])
         raw = next(outputs)
         yield SimpleNamespace(
             text=raw,
@@ -210,6 +212,13 @@ async def test_mlx_adapter_counts_prompt_and_one_format_retry() -> None:
     assert result.format_retries == 1
     assert result.inference is not None
     assert result.inference.peak_memory_gb == 2.0
+
+    summary = await adapter.complete(
+        ModelRequest(request.messages, max_output_tokens=32, purpose="context_summary")
+    )
+    assert summary.content == '{"goal":[]}'
+    assert summary.usage.total_tokens == 17
+    assert limits == [1024, 1024, 32]
 
 
 @pytest.mark.asyncio

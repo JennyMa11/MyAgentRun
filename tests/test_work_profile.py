@@ -14,9 +14,29 @@ from myagentrun.work_profile import TOOLS, full_work_config
 def test_full_work_profile_enables_tools_and_extensions(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
+    (workspace / "myagentrun.toml").write_text(
+        '[myagentrun]\nmodel_profile = "openai"\nmodel = "glm-5.3-flash"\n'
+        'endpoint = "https://moerouter.com/v1/chat/completions"\n'
+        'api_key_env = "MYAGENTRUN_MOEROUTER_API_KEY"\n'
+        "max_tokens = 1000000\nmax_steps = 200\nmax_tool_calls = 400\n"
+        "max_seconds = 3600\n"
+        "context_input_budget = 65536\n"
+    )
     config = tmp_path / "work.toml"
     config.write_text(full_work_config(workspace, tmp_path / "private"))
-    options = resolve_config(config_path=config, environ={}).options
+    resolved = resolve_config(config_path=config, environ={})
+    assert resolved.model_options == {
+        "model_profile": "openai",
+        "model": "glm-5.3-flash",
+        "endpoint": "https://moerouter.com/v1/chat/completions",
+        "api_key_env": "MYAGENTRUN_MOEROUTER_API_KEY",
+    }
+    options = resolved.options
+    assert resolved.budget.max_tokens == 1_000_000
+    assert resolved.budget.max_steps == 200
+    assert resolved.budget.max_tool_calls == 400
+    assert resolved.budget.max_duration_seconds == 3600
+    assert options.context_input_budget == 65_536
     assert options.allow_shell
     assert options.allow_write
     assert options.approval_mode == "ask"

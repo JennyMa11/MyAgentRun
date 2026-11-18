@@ -20,8 +20,6 @@ from myagentrun.application.conversations import ConversationService
 from myagentrun.context import (
     BudgetContext,
     FullHistoryContext,
-    PythonSymbolRetriever,
-    RepositoryRetriever,
     RetrievalContext,
     SlidingWindowContext,
     SummaryCompactionContext,
@@ -84,6 +82,9 @@ from myagentrun.tools import (
     WriteFileTool,
 )
 from myagentrun.tools import ToolBundle as ToolBundle  # noqa: PLC0414 - public compatibility export
+
+_DISCOVERY_TOOLS = frozenset({"list_files", "search", "search_code", "find_symbol"})
+_RETRIEVAL_STRATEGIES = frozenset({"retrieval", "retrieval_summary", "symbol"})
 
 MAX_SUBAGENTS = 32
 MAX_SUBAGENT_PARALLEL = 8
@@ -360,6 +361,9 @@ def build_local_runtime(  # noqa: PLR0912, PLR0913, PLR0915 - explicit compositi
         approvals=adapters.approvals
         or (DenyApproval() if options.approval_mode == "ask" else None),
         hooks=hooks,
+        discovery_tools=_DISCOVERY_TOOLS
+        if options.context_strategy in _RETRIEVAL_STRATEGIES
+        else frozenset(),
     )
     if adapters.tool_wrapper is not None:
         tool_runtime = adapters.tool_wrapper(tool_runtime)
@@ -388,7 +392,6 @@ def build_local_runtime(  # noqa: PLR0912, PLR0913, PLR0915 - explicit compositi
             options,
             model=model,
             tools=tool_runtime.definitions(),
-            context_tools=context_tools,
         )
     elif isinstance(context, RetrievalContext) and isinstance(context.retriever, SnapshotRetriever):
         context = replace(
@@ -571,10 +574,16 @@ def _build_tools(
     file_backend: FileBackend,
 ) -> ToolRegistry:
     builtin_tools: list[Tool] = [ReadFileTool(sandbox), SearchTool(sandbox), GitTool(runner)]
-    if options.progressive_tools_enabled:
-        builtin_tools.extend(
-            (ListFilesTool(sandbox), SearchCodeTool(sandbox), FindSymbolTool(sandbox))
-        )
+    discovery_modes = (
+        (ListFilesTool, _RETRIEVAL_STRATEGIES),
+        (SearchCodeTool, frozenset({"retrieval", "retrieval_summary"})),
+        (FindSymbolTool, frozenset({"symbol"})),
+    )
+    builtin_tools.extend(
+        tool(sandbox)
+        for tool, strategies in discovery_modes
+        if options.progressive_tools_enabled or options.context_strategy in strategies
+    )
     if options.allow_write:
         builtin_tools.extend((PatchFileTool(sandbox), WriteFileTool(sandbox)))
     if options.allow_shell:
@@ -726,14 +735,13 @@ class AgentLoopPlugin:
         """The factory owns no running tasks; callers own their run lifecycle."""
 
 
-def _build_context(  # noqa: PLR0911, PLR0913 - explicit strategy and capability selection
+def _build_context(
     strategy: str,
-    workspace: Path,
+    _workspace: Path,
     options: RuntimeOptions,
     *,
     model: Model | None = None,
     tools: tuple[ToolDefinition, ...] = (),
-    context_tools: ToolExecutor | None = None,
 ) -> ContextManager:
     if strategy == "budget":
         counter = getattr(model, "count_tokens", None)
@@ -741,33 +749,18 @@ def _build_context(  # noqa: PLR0911, PLR0913 - explicit strategy and capability
             (lambda messages: counter(messages, tools)) if callable(counter) else estimate_tokens
         )
         return BudgetContext(options.context_input_budget, count)
-    if strategy == "full":
+    if strategy in {"full", "retrieval"}:
         return FullHistoryContext()
     if strategy == "sliding":
         return SlidingWindowContext(options.sliding_window)
-    if strategy == "summary":
+    if strategy in {"summary_pruned", "summary_model"}:
+        return SummaryCompactionContext(
+            options.recent_messages,
+            name=strategy,
+            prune_tool_results=True,
+            model_summary=strategy == "summary_model",
+        )
+    if strategy in {"summary", "retrieval_summary", "symbol"}:
         return SummaryCompactionContext(options.recent_messages)
-    if strategy == "retrieval":
-        return RetrievalContext(
-            FullHistoryContext(),
-            SnapshotRetriever(context_tools, exclude_skills=bool(options.skill_roots))
-            if context_tools
-            else RepositoryRetriever(workspace),
-        )
-    if strategy == "retrieval_summary":
-        return RetrievalContext(
-            SummaryCompactionContext(options.recent_messages),
-            SnapshotRetriever(context_tools, exclude_skills=bool(options.skill_roots))
-            if context_tools
-            else RepositoryRetriever(workspace),
-        )
-    if strategy == "symbol":
-        return RetrievalContext(
-            SummaryCompactionContext(options.recent_messages),
-            SnapshotRetriever(context_tools, symbols=True, exclude_skills=bool(options.skill_roots))
-            if context_tools
-            else PythonSymbolRetriever(workspace),
-            name="symbol_retrieval",
-        )
     msg = f"unknown context strategy: {strategy}"
     raise ValueError(msg)

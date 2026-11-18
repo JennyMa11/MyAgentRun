@@ -400,7 +400,10 @@ async def test_derived_untrusted_context_does_not_gain_system_role(
     derived = [
         m for m in model.requests[0].messages if m.name in {"context_summary", "repo_retrieval"}
     ]
-    assert derived
+    if strategy == "retrieval":
+        assert not derived
+    else:
+        assert derived
     assert all(m.role is Role.USER for m in derived)
 
 

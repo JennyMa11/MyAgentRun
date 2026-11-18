@@ -85,6 +85,8 @@ _CONTEXT_STRATEGIES: Final = (
     "full",
     "sliding",
     "summary",
+    "summary_pruned",
+    "summary_model",
     "retrieval",
     "retrieval_summary",
     "symbol",

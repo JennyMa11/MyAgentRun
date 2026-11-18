@@ -347,6 +347,7 @@ class OpenAICompatibleModel:
         max_output_tokens: int | None = None,
         require_usage: bool = False,
         transport: httpx.AsyncBaseTransport | None = None,
+        max_stream_bytes: int = 1_048_576,
     ) -> None:
         if not endpoint.startswith(("https://", "http://")):
             msg = "model endpoint must be an HTTP(S) URL"
@@ -359,6 +360,8 @@ class OpenAICompatibleModel:
             raise ValueError(msg)
         if max_output_tokens is not None and max_output_tokens < 1:
             raise ValueError("max_output_tokens must be positive")
+        if not 1 <= max_stream_bytes <= 64 * 1024 * 1024:
+            raise ValueError("max_stream_bytes must be between 1 byte and 64 MiB")
         self._endpoint = endpoint
         self._model = model
         self._api_key = api_key
@@ -372,6 +375,7 @@ class OpenAICompatibleModel:
         self._max_output_tokens = max_output_tokens
         self._require_usage = require_usage
         self._transport = transport
+        self._max_stream_bytes = max_stream_bytes
 
     async def stream(self, request: ModelRequest) -> AsyncIterator[StreamEvent]:
         """Stream a cancellable request without replaying an already displayed attempt."""
@@ -382,6 +386,7 @@ class OpenAICompatibleModel:
             secret=self._api_key,
             timeout_seconds=self._timeout,
             transport=self._transport,
+            max_bytes=self._max_stream_bytes,
         )
         try:
             async for event in stream:
@@ -402,11 +407,12 @@ class OpenAICompatibleModel:
 
     async def complete(self, request: ModelRequest) -> ModelResponse:
         """Send one request, retrying only explicitly transient failures."""
-        for attempt in range(1, self._max_attempts + 1):
+        max_attempts = 1 if request.purpose == "context_summary" else self._max_attempts
+        for attempt in range(1, max_attempts + 1):
             try:
                 return await asyncio.to_thread(self._complete_sync, request)
             except ModelAdapterError as exc:
-                if not exc.retryable or attempt == self._max_attempts:
+                if not exc.retryable or attempt == max_attempts:
                     raise
                 await self._sleep(self._backoff(attempt))
         raise AssertionError("unreachable model retry state")
@@ -423,8 +429,13 @@ class OpenAICompatibleModel:
             "temperature": self._temperature,
             "messages": [self._message_payload(message) for message in request.messages],
         }
-        if self._max_output_tokens is not None:
-            payload["max_tokens"] = self._max_output_tokens
+        output_limits = [
+            value
+            for value in (self._max_output_tokens, request.max_output_tokens)
+            if value is not None
+        ]
+        if output_limits:
+            payload["max_tokens"] = min(output_limits)
         if self._thinking is not None:
             # DeepSeek-specific.  Sent only for providers that declare it, because
             # an unknown top-level parameter is rejected by stricter gateways.

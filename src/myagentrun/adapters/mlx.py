@@ -256,6 +256,9 @@ class MLXAdapter:
             prompt = self._encode(tokenizer, messages)
             if len(prompt) > self.input_budget:
                 raise ModelCallError("MLX input exceeds context budget", code="context_overflow")
+            output_limit = min(
+                self.max_output_tokens, request.max_output_tokens or self.max_output_tokens
+            )
             usage = TokenUsage()
             for attempt in range(2):
                 with suppress(ImportError):
@@ -264,7 +267,7 @@ class MLXAdapter:
                 first_ms: float | None = None
                 parts: list[str] = []
                 final: _Generation | None = None
-                for chunk in stream(model, tokenizer, prompt, max_tokens=self.max_output_tokens):
+                for chunk in stream(model, tokenizer, prompt, max_tokens=output_limit):
                     if first_ms is None:
                         first_ms = (time.perf_counter() - started) * 1_000
                     parts.append(chunk.text)
@@ -276,6 +279,14 @@ class MLXAdapter:
                     )
                 usage += TokenUsage(final.prompt_tokens, final.generation_tokens)
                 raw = "".join(parts)
+                if request.purpose == "context_summary":
+                    return ModelResponse(
+                        content=raw,
+                        finish_reason="length"
+                        if final.generation_tokens >= output_limit
+                        else "stop",
+                        usage=usage,
+                    )
                 try:
                     response = parse_action(raw, request.tools)
                 except ValueError as exc:
