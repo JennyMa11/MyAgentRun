@@ -3,6 +3,7 @@
 from myagentrun.tools.builtin import (
     FindSymbolTool,
     GitTool,
+    GrepTool,
     ListFilesTool,
     OpenFileTool,
     PatchFileTool,
@@ -28,6 +29,7 @@ from myagentrun.tools.runtime import (
 __all__ = [
     "FindSymbolTool",
     "GitTool",
+    "GrepTool",
     "ListFilesTool",
     "LocalArtifactStore",
     "OpenFileTool",

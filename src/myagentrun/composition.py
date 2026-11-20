@@ -72,6 +72,7 @@ from myagentrun.runtime.verification import VerificationExtension
 from myagentrun.tools import (
     FindSymbolTool,
     GitTool,
+    GrepTool,
     ListFilesTool,
     LocalArtifactStore,
     OpenFileTool,
@@ -263,6 +264,7 @@ def build_local_runtime(  # noqa: PLR0912, PLR0913, PLR0915 - explicit compositi
     file_tools: tuple[Tool, ...] = (
         ReadFileTool(sandbox),
         SearchTool(sandbox),
+        GrepTool(sandbox),
         ListFilesTool(sandbox),
         SearchCodeTool(sandbox),
         FindSymbolTool(sandbox),
@@ -426,6 +428,10 @@ def build_local_runtime(  # noqa: PLR0912, PLR0913, PLR0915 - explicit compositi
     counter = getattr(model, "count_tokens", None)
     if memory is not None and memory.reader is not None and callable(counter):
         memory.reader.count_tokens = lambda messages: counter(messages, ())
+    if memory is not None and memory.reader is not None:
+        # Recheck with the real tokenizer: an estimate-sized envelope can cost more
+        # under the assembled model, and that must fail here, not mid-run.
+        memory.reader.validate_output_limits()
     context = ContextAssembly(
         context,
         skills=skills,
@@ -604,7 +610,12 @@ def _build_tools(
     extra_tools: tuple[Tool, ...],
     file_backend: FileBackend,
 ) -> ToolRegistry:
-    builtin_tools: list[Tool] = [ReadFileTool(sandbox), SearchTool(sandbox), GitTool(runner)]
+    builtin_tools: list[Tool] = [
+        ReadFileTool(sandbox),
+        SearchTool(sandbox),
+        GrepTool(sandbox),
+        GitTool(runner),
+    ]
     if options.progressive_tools_enabled:
         builtin_tools.extend(
             (ListFilesTool(sandbox), SearchCodeTool(sandbox), FindSymbolTool(sandbox))

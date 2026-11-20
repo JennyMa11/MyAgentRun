@@ -33,13 +33,13 @@ from myagentrun.domain.memory import (
 from myagentrun.domain.memory_content import MemoryContentPolicy
 from myagentrun.domain.memory_discovery import (
     MAX_QUERY_BYTES,
-    SELECTOR_VERSION,
     MemoryReference,
     MemorySearchResult,
     discover_memory,
     snapshot_sha256,
 )
 from myagentrun.domain.memory_query import MemoryMatchState
+from myagentrun.domain.memory_ranking import DEFAULT_SELECTOR, SelectorName
 from myagentrun.ports import EventSink
 from myagentrun.ports.memory import MemoryEvidenceError, MemoryStore, MemoryStoreError
 from myagentrun.tools.runtime import Tool, ToolError, schema_for
@@ -68,6 +68,7 @@ class ProgressiveMemoryReader:
         count_tokens: TokenCounter = estimate_tokens,
         events: EventSink | None = None,
         forbidden_content_sha256: tuple[str, ...] = (),
+        selector: SelectorName = DEFAULT_SELECTOR,
     ) -> None:
         self._store = store
         self._project = project_id
@@ -79,6 +80,7 @@ class ProgressiveMemoryReader:
         self._read_limit = read_token_limit
         self.count_tokens = count_tokens
         self._events = events
+        self._selector = selector
         self._query_policy = MemoryContentPolicy(forbidden_content_sha256)
         self._run: str | None = None
         self._token: object | None = None
@@ -109,6 +111,55 @@ class ProgressiveMemoryReader:
     def _check_run(self, run_id: str) -> None:
         if self._run != run_id:
             raise ToolError("memory_run_mismatch", "memory_run_mismatch")
+
+    def validate_output_limits(self) -> None:
+        """Fail at assembly when a limit cannot hold the worst envelope it returns.
+
+        ``_fit`` can drop every card or entry, but never the fixed wrapper — and the
+        wrapper grows with up to five omissions plus the truncation fields it adds
+        while dropping.  Measuring an empty envelope let limits through that still
+        raised on prepare as soon as the project held a few records, so measure the
+        envelope ``_fit`` can actually be left with.
+        """
+        # Ids are shaped like the ones proposals actually get ("memory_" + uuid4 hex)
+        # and the reason is the longest one the reader emits, otherwise the
+        # measurement is optimistic and a "valid" limit still fails at run time.
+        omissions: list[JsonValue] = [
+            {"entry_id": f"memory_{index:032d}", "reason": "memory_evidence_unavailable"}
+            for index in range(MAX_RETRIEVED_ENTRIES)
+        ]
+        worst_cards = _encode(
+            {
+                "cards": [],
+                "omissions": omissions,
+                "remaining_omission_count": 0,
+                "snapshot_sha256": "0" * 64,
+                "query_sha256": "0" * 64,
+                "selector_version": self._selector,
+                "term_overlap": False,
+                "truncated": True,
+                "token_omission_count": MAX_RETRIEVED_ENTRIES,
+                "omission_reason": "token_limit",
+                "estimated_tokens": self._index_limit,
+            }
+        )
+        worst_entries = _encode(
+            {
+                **self._entry_payload(()),
+                "omissions": omissions,
+                "truncated": True,
+                "token_omission_count": MAX_RETRIEVED_ENTRIES,
+                "omission_reason": "token_limit",
+                "estimated_tokens": self._read_limit,
+            }
+        )
+        for code, limit, body in (
+            ("index", self._index_limit, worst_cards),
+            ("search", self._search_limit, worst_cards),
+            ("read", self._read_limit, worst_entries),
+        ):
+            if self.count_tokens((Message(Role.TOOL, body),)) > limit:
+                raise ValueError(f"memory_output_budget_unusable:{code}")
 
     def validate_query_values(self, values: tuple[str, ...]) -> None:
         """Apply registered forbidden-material policy before any storage or call-start event."""
@@ -226,18 +277,53 @@ class ProgressiveMemoryReader:
         )
 
     def _fit(self, payload: dict[str, JsonValue], key: str, limit: int) -> dict[str, JsonValue]:
+        """Drop whole rows, then shrink the diagnostic tail, never emit half a record.
+
+        The rows are the knowledge; omissions are diagnostics.  Keeping every id in
+        the diagnostics while dropping all content turned a legal limit into a hard
+        failure, so after the rows are gone the omission list shrinks too and the
+        counts stay truthful through ``omission_count``.
+        """
         rows = payload[key]
         assert isinstance(rows, list)
         payload["estimated_tokens"] = limit
         dropped = 0
         while self.count_tokens((Message(Role.TOOL, _encode(payload)),)) > limit:
-            if not rows:
-                raise ToolError("memory_output_budget_exhausted", "memory_output_budget_exhausted")
-            rows.pop()
-            dropped += 1
-            payload["truncated"] = True
-            payload["token_omission_count"] = dropped
-            payload["omission_reason"] = "token_limit"
+            if rows:
+                rows.pop()
+                dropped += 1
+                payload["truncated"] = True
+                payload["token_omission_count"] = dropped
+                payload["omission_reason"] = "token_limit"
+                continue
+            omissions = payload.get("omissions")
+            if isinstance(omissions, list) and omissions:
+                # Accumulate rather than recompute from the shrinking list: with more
+                # than one pop that formula would silently undercount.
+                pending_count = payload.get("remaining_omission_count")
+                already = payload.get("omission_count")
+                payload["omission_count"] = (
+                    (already if type(already) is int else 0)
+                    + 1
+                    + (pending_count if type(pending_count) is int else 0)
+                )
+                payload["remaining_omission_count"] = 0
+                omissions.pop()
+                payload["truncated"] = True
+                payload["omission_reason"] = "token_limit"
+                continue
+            remaining = payload.get("remaining_omission_count")
+            if type(remaining) is int and remaining > 0:
+                already = payload.get("omission_count")
+                payload["omission_count"] = (already if type(already) is int else 0) + remaining
+                payload["remaining_omission_count"] = 0
+                continue
+            if payload.get("estimated_tokens") is not None:
+                # The estimate is the last optional field: a limit that only fits the
+                # fixed wrapper still yields a truthful, bounded empty result.
+                payload["estimated_tokens"] = None
+                continue
+            raise ToolError("memory_output_budget_exhausted", "memory_output_budget_exhausted")
         for _ in range(3):
             payload["estimated_tokens"] = self.count_tokens((Message(Role.TOOL, _encode(payload)),))
         return payload
@@ -262,6 +348,7 @@ class ProgressiveMemoryReader:
                 paths=paths,
                 error_type=error_type,
                 limit=limit,
+                selector=self._selector,
             )
         except MemoryValidationError as exc:
             raise ToolError(exc.code, exc.code) from None
@@ -276,6 +363,7 @@ class ProgressiveMemoryReader:
                 paths=paths,
                 error_type=error_type,
                 limit=limit,
+                selector=self._selector,
             )
         except MemoryValidationError as exc:
             raise ToolError(exc.code, exc.code) from None
@@ -316,6 +404,7 @@ class ProgressiveMemoryReader:
             "snapshot_sha256": found.snapshot_sha256,
             "query_sha256": found.query_sha256,
             "selector_version": found.selector_version,
+            "term_overlap": found.term_overlap,
             "truncated": found.truncated,
         }
 
@@ -351,6 +440,7 @@ class ProgressiveMemoryReader:
                     tuple(item for item in entries.values() if item.topic == entry.topic),
                     project_id=self._project,
                     applicable_version=self._version,
+                    selector=self._selector,
                 )
                 if any(card.entry_id == entry.entry_id for card in eligible.cards):
                     reason = await self._fresh(entry)
@@ -494,7 +584,7 @@ class ProgressiveMemoryReader:
                     step_id,
                     {
                         "call_id": observation.call_id,
-                        "selector_version": SELECTOR_VERSION,
+                        "selector_version": self._selector,
                         "snapshot_sha256": snapshot_sha256(self._snapshot or ()),
                         "references": references,
                         "status": observation.status.value,

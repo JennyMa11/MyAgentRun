@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from myagentrun.adapters.memory import SQLiteMemoryStore
+from myagentrun.domain import Message, Role
 from myagentrun.domain.memory import (
     MemoryEntry,
     MemoryEvidence,
@@ -20,6 +21,8 @@ from myagentrun.domain.memory import (
     select_memory,
 )
 from myagentrun.ports.memory import MemoryStoreError
+from myagentrun.runtime.memory import MemoryService
+from myagentrun.tools.runtime import ToolError
 
 pytestmark = pytest.mark.integration
 
@@ -782,3 +785,53 @@ async def test_replacing_the_granted_directory_invalidates_the_open_store(tmp_pa
         await store.get("project_one", "memory_one")
     assert not database.exists()
     await store.close()
+
+
+@pytest.mark.asyncio
+async def test_a_published_record_that_could_not_be_announced_keeps_its_guard(
+    tmp_path: Path,
+) -> None:
+    """Durable-then-failed must not leave a stored record without its guard."""
+    workspace, private = tmp_path / "workspace", tmp_path / "private"
+    workspace.mkdir()
+    private.mkdir()
+
+    def observer(stage: str) -> None:
+        if stage == "after_commit":
+            raise RuntimeError("notification channel down")
+
+    store = SQLiteMemoryStore(
+        private / "memory.sqlite3",
+        allowed_root=private,
+        workspace=workspace,
+        transaction_observer=observer,
+    )
+    service = MemoryService(store, project_id="project_one", applicable_version="v1")
+    service.begin_run("run_one", task="Repair the example module.")
+    try:
+        service.observe_context(
+            "run_one",
+            (
+                Message(
+                    Role.TOOL,
+                    '{"status":"succeeded","result":{"content":"Actual fixture output."}}',
+                    name="read_file",
+                    tool_call_id="fixture_read",
+                ),
+            ),
+        )
+        with pytest.raises(ToolError, match="memory_committed_notification_failed"):
+            await service.propose(
+                "run_one",
+                kind=MemoryKind.DIAGNOSIS,
+                topic="first_topic",
+                content="A reusable summary.",
+                paths=(),
+                error_type=None,
+            )
+        stored = await store.snapshot("project_one")
+        assert len(stored) == 1
+        assert service._entry_policies, "the published record must keep its guard"
+    finally:
+        service.end_run("run_one")
+        await store.close()

@@ -8,7 +8,8 @@ import pytest
 from myagentrun.adapters.memory import SQLiteMemoryStore
 from myagentrun.adapters.trace import JsonlTraceWriter
 from myagentrun.domain import JsonValue, Message, Role, ToolCall, ToolStatus
-from myagentrun.domain.memory import MemoryStatus, MemoryValidationError
+from myagentrun.domain.memory import MemoryEntry, MemoryStatus, MemoryValidationError
+from myagentrun.ports.memory import MemoryStoreError
 from myagentrun.runtime import EventBus
 from myagentrun.runtime.memory import MemoryService, ProposeMemoryTool
 from myagentrun.tools import PermissionPolicy, ToolRegistry, ToolRuntime
@@ -312,3 +313,154 @@ async def test_invalid_source_text_does_not_leave_a_half_started_memory_run(tmp_
     service.begin_run("valid", task="Repair the example module.")
     service.end_run("valid")
     await store.close()
+
+
+class _FailingStore:
+    """Count create attempts; every write fails, as a broken volume would."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def create(self, entry: MemoryEntry) -> MemoryEntry:
+        del entry
+        self.calls += 1
+        raise MemoryStoreError("memory_transaction_failed")
+
+    async def get(self, project_id: str, entry_id: str) -> MemoryEntry | None:
+        del project_id, entry_id
+        return None
+
+    async def snapshot(self, project_id: str) -> tuple[MemoryEntry, ...]:
+        del project_id
+        return ()
+
+    async def replace(self, expected: MemoryEntry, updated: MemoryEntry) -> MemoryEntry:
+        del expected, updated
+        raise MemoryStoreError("memory_transaction_failed")
+
+    async def close(self) -> None:
+        return None
+
+
+def _proposal(topic: str) -> dict[str, JsonValue]:
+    return {"kind": "diagnosis", "topic": topic, "content": f"Summary {topic}."}
+
+
+@pytest.mark.asyncio
+async def test_failed_writes_do_not_consume_the_proposal_guard_quota() -> None:
+    """A broken store must not permanently disable proposing once it recovers."""
+    store = _FailingStore()
+    service = MemoryService(store, project_id="project_one", applicable_version="v1")
+    registry = ToolRegistry()
+    registry.register(ProposeMemoryTool(service))
+    runtime = ToolRuntime(registry, PermissionPolicy(frozenset({"memory.propose"})), EventBus())
+    for index in range(101):
+        service.begin_run(f"run_{index}")
+        try:
+            result = await runtime.execute(
+                ToolCall("proposal", "propose_memory", _proposal(f"topic_{index}")),
+                f"run_{index}",
+                1,
+            )
+        finally:
+            service.end_run(f"run_{index}")
+        assert result.status is ToolStatus.FAILED
+        assert result.error is not None
+        assert result.error.code == "memory_transaction_failed"
+
+    assert store.calls == 101
+    assert service._entry_policies == {}
+
+
+@pytest.mark.asyncio
+async def test_the_project_entry_limit_is_reported_by_the_store_not_the_guard(
+    tmp_path: Path,
+) -> None:
+    """A full project must fail with the store's limit, not a guard bookkeeping error."""
+    workspace, private = tmp_path / "workspace", tmp_path / "private"
+    workspace.mkdir()
+    private.mkdir()
+    store = SQLiteMemoryStore(private / "memory.sqlite3", allowed_root=private, workspace=workspace)
+    service = MemoryService(store, project_id="project_one", applicable_version="v1")
+    registry = ToolRegistry()
+    registry.register(ProposeMemoryTool(service))
+    runtime = ToolRuntime(registry, PermissionPolicy(frozenset({"memory.propose"})), EventBus())
+    try:
+        for index in range(100):
+            service.begin_run(f"run_{index}")
+            try:
+                result = await runtime.execute(
+                    ToolCall("proposal", "propose_memory", _proposal(f"topic_{index}")),
+                    f"run_{index}",
+                    1,
+                )
+            finally:
+                service.end_run(f"run_{index}")
+            assert result.status is ToolStatus.SUCCEEDED, index
+        assert len(await store.snapshot("project_one")) == 100
+
+        service.begin_run("run_full")
+        try:
+            full = await runtime.execute(
+                ToolCall("proposal", "propose_memory", _proposal("topic_full")),
+                "run_full",
+                1,
+            )
+        finally:
+            service.end_run("run_full")
+        assert full.status is ToolStatus.FAILED
+        assert full.error is not None
+        assert full.error.code == "memory_project_limit"
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_a_stored_proposal_keeps_its_own_raw_material_guard_within_the_run(
+    tmp_path: Path,
+) -> None:
+    """Rolling state back must not resurrect material the run already observed."""
+    workspace, private = tmp_path / "workspace", tmp_path / "private"
+    workspace.mkdir()
+    private.mkdir()
+    store = SQLiteMemoryStore(private / "memory.sqlite3", allowed_root=private, workspace=workspace)
+    service = MemoryService(store, project_id="project_one", applicable_version="v1")
+    registry = ToolRegistry()
+    registry.register(ProposeMemoryTool(service))
+    runtime = ToolRuntime(registry, PermissionPolicy(frozenset({"memory.propose"})), EventBus())
+    service.begin_run("run_one", task="Repair the example module.")
+    try:
+        first = await runtime.execute(
+            ToolCall("first", "propose_memory", _proposal("first_topic")), "run_one", 1
+        )
+        assert first.status is ToolStatus.SUCCEEDED
+        service.observe_context(
+            "run_one",
+            (
+                Message(
+                    Role.TOOL,
+                    '{"status":"succeeded","result":{"content":"Fresh fixture output."}}',
+                    name="read_file",
+                    tool_call_id="fixture_read",
+                ),
+            ),
+        )
+        leak = await runtime.execute(
+            ToolCall(
+                "leak",
+                "propose_memory",
+                {
+                    "kind": "diagnosis",
+                    "topic": "second_topic",
+                    "content": "Fresh fixture output.",
+                },
+            ),
+            "run_one",
+            2,
+        )
+        assert leak.status is ToolStatus.FAILED
+        assert leak.error is not None
+        assert leak.error.code == "memory_raw_material"
+    finally:
+        service.end_run("run_one")
+        await store.close()

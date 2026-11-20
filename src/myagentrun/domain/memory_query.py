@@ -14,9 +14,19 @@ from myagentrun.domain.memory import (
     MAX_MEMORY_PATHS,
 )
 
-_FILES = frozenset(
-    {"read_file", "write_file", "patch_file", "find_symbol", "search_code", "list_files"}
-)
+_FILES = frozenset({"read_file", "write_file", "patch_file"})
+# A scope is not evidence: a search root or a listed directory is what the model
+# asked to look inside, so only the paths a successful result actually named become
+# hints.  ``list_files`` belongs here, not in ``_FILES``: one empty listing used to
+# unlock every conditional record scoped to that directory.
+_HIT_KEYS: dict[str, str] = {
+    "search": "matches",
+    "grep": "matches",
+    "search_code": "candidates",
+    "find_symbol": "symbols",
+    "list_files": "files",
+}
+_FILES_HITS = frozenset({"list_files"})
 _ERROR = re.compile(r"\b([A-Za-z][A-Za-z0-9_]*Error):")
 _CODE = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,127}")
 
@@ -60,34 +70,87 @@ def _failure(payload: dict[str, JsonValue]) -> str | None:
     return None
 
 
+def _hits(call: ToolCall, payload: dict[str, JsonValue]) -> tuple[str, ...]:
+    """Return every canonical path a completed search or listing named."""
+    key = _HIT_KEYS.get(call.name)
+    if key is None or payload.get("status") != "succeeded":
+        return ()
+    result = payload.get("result")
+    rows = result.get(key) if isinstance(result, dict) else None
+    if not isinstance(rows, list):
+        return ()
+    found: list[str] = []
+    for row in rows:
+        # ``list_files`` reports bare paths; the search tools report row objects.
+        raw = (
+            row if call.name in _FILES_HITS else row.get("path") if isinstance(row, dict) else None
+        )
+        path = _path(raw)
+        if path is not None and path not in found:
+            found.append(path)
+    return tuple(found)
+
+
+def _observed_paths(call: ToolCall, payload: dict[str, JsonValue]) -> tuple[str, ...]:
+    """A read grounds its file; a search grounds only the files it named.
+
+    ``search``/``grep``/``search_code``/``find_symbol`` take a *scope* argument, so
+    their ``path`` is what the model chose to look inside, never something it read.
+    A file tool is the same in one respect that matters here: its ``path`` argument
+    is a request.  Only a call that actually succeeded proves the file was reached,
+    so a failed, timed-out, denied or invalid call grounds nothing.
+    """
+    if call.name in _HIT_KEYS:
+        return _hits(call, payload)
+    if payload.get("status") != "succeeded":
+        return ()
+    path = _path(call.arguments.get("path")) if call.name in _FILES else None
+    return (path,) if path is not None else ()
+
+
 def memory_query(history: tuple[Message, ...]) -> tuple[tuple[str, ...], str | None]:
-    """Use the latest 32 canonical accessed paths and the last unresolved tool failure."""
+    """Use the latest 32 canonical accessed paths and the last unresolved tool failure.
+
+    Facts come from paired, executed tool results only.  An assistant message merely
+    announces a call, so pairing consumes declarations in order: a reused ``call_id``
+    cannot let a later unexecuted declaration borrow an earlier call's result.
+    """
     paths: list[str] = []
-    calls: dict[str, str] = {}
+    pending: list[ToolCall] = []
     error_type: str | None = None
     error_tool: str | None = None
     for message in history:
-        for call in message.tool_calls:
-            calls[call.call_id] = call.name
-            path = _path(call.arguments.get("path")) if call.name in _FILES else None
-            if path is not None:
-                if path in paths:
-                    paths.remove(path)
-                paths.append(path)
-                paths = paths[-MAX_MEMORY_PATHS:]
-        name = calls.get(message.tool_call_id or "")
-        if message.role is not Role.TOOL or name is None:
+        if message.role is Role.ASSISTANT:
+            pending.extend(message.tool_calls)
             continue
+        if message.role is not Role.TOOL:
+            continue
+        index = next(
+            (
+                position
+                for position, call in enumerate(pending)
+                if call.call_id == message.tool_call_id and call.name == message.name
+            ),
+            None,
+        )
+        if index is None:
+            continue
+        issued = pending.pop(index)
         try:
             payload: JsonValue = json.loads(message.content)
         except ValueError:
             continue
         if not isinstance(payload, dict):
             continue
+        for hit in _observed_paths(issued, payload):
+            if hit in paths:
+                paths.remove(hit)
+            paths.append(hit)
+            paths = paths[-MAX_MEMORY_PATHS:]
         failed = _failure(payload)
         if failed is not None:
-            error_type, error_tool = failed, name
-        elif payload.get("status") == "succeeded" and name == error_tool:
+            error_type, error_tool = failed, issued.name
+        elif payload.get("status") == "succeeded" and issued.name == error_tool:
             error_type, error_tool = None, None
     return tuple(sorted(paths)), error_type
 
@@ -106,8 +169,7 @@ class MemoryMatchState:
         if payload.get("status") not in {"succeeded", "failed", "timed_out"}:
             return self
         paths = list(self.paths)
-        path = _path(call.arguments.get("path")) if call.name in _FILES else None
-        if path is not None:
+        for path in _observed_paths(call, payload):
             if path in paths:
                 paths.remove(path)
             paths.append(path)

@@ -16,6 +16,8 @@ from myagentrun.domain import AgentBudget, JsonValue, ModelPricing
 from myagentrun.domain.memory import (
     MAX_FORBIDDEN_MEMORY_SOURCES,
     MAX_PROJECT_ENTRIES,
+    MIN_INDEX_TOKENS,
+    MIN_READ_TOKENS,
     MemoryConfig,
     MemoryEvidenceFile,
     MemoryEvidenceGrant,
@@ -203,9 +205,10 @@ class _MemorySettings(BaseModel):
     database: str
     storage_root: str
     retrieval_mode: Literal["deterministic_v1", "progressive_v2"] = "deterministic_v1"
-    index_token_limit: int = Field(default=512, ge=1, le=512)
-    search_token_limit: int = Field(default=512, ge=1, le=512)
-    read_token_limit: int = Field(default=2048, ge=1, le=2048)
+    retrieval_selector: Literal["memory_lexical_v1", "memory_lexical_v2"] = "memory_lexical_v1"
+    index_token_limit: int = Field(default=512, ge=MIN_INDEX_TOKENS, le=512)
+    search_token_limit: int = Field(default=512, ge=MIN_INDEX_TOKENS, le=512)
+    read_token_limit: int = Field(default=2048, ge=MIN_READ_TOKENS, le=2048)
     evidence_root: str | None = None
     evidence_grants: list[_MemoryGrantSettings] = Field(
         default_factory=list, max_length=MAX_PROJECT_ENTRIES
@@ -227,6 +230,7 @@ class _MemorySettings(BaseModel):
             self.index_token_limit,
             self.search_token_limit,
             self.read_token_limit,
+            self.retrieval_selector,
         )
 
     @model_validator(mode="after")

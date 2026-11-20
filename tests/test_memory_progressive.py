@@ -41,12 +41,15 @@ from myagentrun.domain import (
 from myagentrun.domain.extensions import ExtensionBudgetExhaustedError
 from myagentrun.domain.harness import StreamEvent
 from myagentrun.domain.memory import (
+    MIN_INDEX_TOKENS,
+    MIN_READ_TOKENS,
     MemoryConfig,
     MemoryEntry,
     MemoryEvidenceFile,
     MemoryEvidenceGrant,
     MemoryKind,
     MemoryStatus,
+    MemoryValidationError,
 )
 from myagentrun.domain.memory_discovery import MemoryReference
 from myagentrun.ports.memory import MemoryEvidenceError
@@ -960,6 +963,78 @@ def test_mv2_14_reference_revision_requires_a_positive_integer(revision: int) ->
         MemoryReference("entry", revision, "a" * 64)
 
 
+@pytest.mark.parametrize("tool_name", ["grep", "search", "search_code", "find_symbol"])
+@pytest.mark.asyncio
+async def test_a_successful_search_hit_unlocks_conditional_knowledge(
+    tmp_path: Path, tool_name: str
+) -> None:
+    """Grep is grounding, not retrieval: the hit file is what makes the rule applicable."""
+    reader, store, _, entry = await _setup(tmp_path)
+    rows: dict[str, JsonValue] = {
+        "grep": {"matches": [{"path": "src/db/pool.py", "line": 2, "text": "cancel"}]},
+        "search": {"matches": [{"path": "src/db/pool.py", "line": 2, "text": "cancel"}]},
+        "search_code": {"candidates": [{"path": "src/db/pool.py", "matches": 1}]},
+        "find_symbol": {"symbols": [{"path": "src/db/pool.py", "start_line": 1}]},
+    }
+    history = (
+        Message(
+            Role.ASSISTANT,
+            "",
+            tool_calls=(ToolCall("hit", tool_name, {"query": "cancel", "path": "src"}),),
+        ),
+        Message(
+            Role.TOOL,
+            json.dumps({"status": "succeeded", "result": rows[tool_name], "error": None}),
+            name=tool_name,
+            tool_call_id="hit",
+        ),
+    )
+    reader.begin_run("actor")
+    try:
+        # prepare runs on every step, so the same history is observed repeatedly.
+        for _ in range(2):
+            reader.observe_history(history)
+        result = await _runtime(reader).execute(
+            ToolCall("read", "read_memory", {"references": [_reference(entry)]}), "actor", 1
+        )
+        assert entry.content in str(result.result)
+    finally:
+        reader.end_run("actor")
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_a_search_scope_alone_does_not_unlock_conditional_knowledge(
+    tmp_path: Path,
+) -> None:
+    """Searching a directory is not reading a file in it."""
+    reader, store, _, entry = await _setup(tmp_path)
+    history = (
+        Message(
+            Role.ASSISTANT,
+            "",
+            tool_calls=(ToolCall("hit", "grep", {"query": "nomatch", "path": "src/db"}),),
+        ),
+        Message(
+            Role.TOOL,
+            json.dumps({"status": "succeeded", "result": {"matches": []}, "error": None}),
+            name="grep",
+            tool_call_id="hit",
+        ),
+    )
+    reader.begin_run("actor")
+    try:
+        reader.observe_history(history)
+        result = await _runtime(reader).execute(
+            ToolCall("read", "read_memory", {"references": [_reference(entry)]}), "actor", 1
+        )
+        assert "memory_not_applicable" in str(result.result)
+        assert entry.content not in str(result.result)
+    finally:
+        reader.end_run("actor")
+        await store.close()
+
+
 @pytest.mark.parametrize("history_kind", ["pending", "user_role", "missing_status", "reused_id"])
 @pytest.mark.asyncio
 async def test_forged_future_tool_calls_are_not_observations(
@@ -1238,6 +1313,16 @@ async def test_mv2_04_error_recovery_withdraws_body_from_the_derived_request(
     reader.begin_run("actor")
     runtime = _runtime(reader)
     try:
+        # The applicable path must come from a real successful read; the failure
+        # below only establishes the error fact this test withdraws on recovery.
+        reader.observe(
+            ToolObservation(
+                "visit",
+                "read_file",
+                ToolStatus.SUCCEEDED,
+                effective_call=ToolCall("visit", "read_file", {"path": "src/db/a.py"}),
+            )
+        )
         reader.observe(
             ToolObservation(
                 "bad",
@@ -2004,3 +2089,174 @@ async def test_mv2_14_18_schema_rejects_before_store_and_secret_never_enters_tra
         _assert_database_unchanged(tmp_path, before, private / "memory.sqlite3")
     finally:
         reader.end_run("actor")
+
+
+def test_a_token_limit_that_cannot_hold_an_empty_envelope_is_rejected_at_config(
+    tmp_path: Path,
+) -> None:
+    """A legal-looking limit must not fail later, on every model step.
+
+    ``ge=1`` accepted limits far below the fixed card envelope, so
+    ``prepare_memory_index`` raised ``memory_output_budget_exhausted`` at runtime
+    and blocked the model request instead of returning a bounded empty result.
+    """
+    settings: dict[str, JsonValue] = {
+        "project_id": "alpha",
+        "applicable_version": "v1",
+        "database": str(tmp_path / "private" / "memory.sqlite3"),
+        "storage_root": str(tmp_path / "private"),
+        "retrieval_mode": "progressive_v2",
+    }
+    for field, minimum in (
+        ("index_token_limit", MIN_INDEX_TOKENS),
+        ("search_token_limit", MIN_INDEX_TOKENS),
+        ("read_token_limit", MIN_READ_TOKENS),
+    ):
+        accepted = resolve_config(cli={"memory": {**settings, field: minimum}}, environ={})
+        assert accepted.options.memory is not None
+        with pytest.raises(ConfigError):
+            resolve_config(cli={"memory": {**settings, field: minimum - 1}}, environ={})
+
+
+def test_a_reader_whose_measured_envelope_exceeds_its_limit_is_rejected() -> None:
+    """A real tokenizer may cost more than the estimate, so check the assembled one.
+
+    Rejecting at assembly keeps the failure at configuration time instead of
+    surfacing as a blocked prepare on the first model step.
+    """
+
+    async def _resolved() -> None:
+        return None
+
+    class _Store:
+        pass
+
+    reader = ProgressiveMemoryReader(
+        _Store(),  # type: ignore[arg-type]
+        project_id="alpha",
+        applicable_version="v1",
+        validate_source=_resolved,  # type: ignore[arg-type]
+        check_content=lambda _entry: None,
+        index_token_limit=MIN_INDEX_TOKENS,
+        search_token_limit=MIN_INDEX_TOKENS,
+        read_token_limit=MIN_READ_TOKENS,
+    )
+    reader.count_tokens = lambda _messages: 10_000
+    with pytest.raises(ValueError, match="memory_output_budget_unusable"):
+        reader.validate_output_limits()
+
+
+def test_the_documented_minimum_limits_really_hold_an_empty_envelope(
+    tmp_path: Path,
+) -> None:
+    """Pin the constants to the measured envelope, not to a guess.
+
+    One token below the documented minimum must be unusable, and the minimum itself
+    must be usable under the shared estimator — otherwise the check either rejects
+    a working configuration or lets a failing one through.
+    """
+    private = tmp_path / "private"
+    private.mkdir()
+
+    def config(limit: int) -> MemoryConfig:
+        return MemoryConfig(
+            "alpha",
+            "v1",
+            str(private / "memory.sqlite3"),
+            str(private),
+            retrieval_mode="progressive_v2",
+            index_token_limit=limit,
+            search_token_limit=limit,
+            read_token_limit=MIN_READ_TOKENS,
+        )
+
+    service = MemoryService(
+        object(),  # type: ignore[arg-type]
+        project_id="alpha",
+        applicable_version="v1",
+        config=config(MIN_INDEX_TOKENS),
+    )
+    assert service.reader is not None
+    service.reader.validate_output_limits()
+
+    with pytest.raises(MemoryValidationError, match="memory_config_invalid"):
+        config(MIN_INDEX_TOKENS - 1)
+
+
+def test_a_stricter_assembled_tokenizer_is_rejected_before_the_run(tmp_path: Path) -> None:
+    """The composition root rechecks with the real counter and refuses to start."""
+    private = tmp_path / "private"
+    private.mkdir()
+    config = MemoryConfig(
+        "alpha",
+        "v1",
+        str(private / "memory.sqlite3"),
+        str(private),
+        retrieval_mode="progressive_v2",
+    )
+    service = MemoryService(
+        object(),  # type: ignore[arg-type]
+        project_id="alpha",
+        applicable_version="v1",
+        config=config,
+    )
+    assert service.reader is not None
+    service.reader.count_tokens = lambda _messages: 10_000
+    with pytest.raises(ValueError, match="memory_output_budget_unusable"):
+        service.reader.validate_output_limits()
+
+
+@pytest.mark.parametrize("missing", [1, 2, 5])
+@pytest.mark.asyncio
+async def test_a_minimum_read_limit_survives_a_result_that_is_all_omissions(
+    tmp_path: Path, missing: int
+) -> None:
+    """A legal minimum must not fail once omissions fill the envelope.
+
+    Measuring an *empty* envelope let limits through that raised
+    ``memory_output_budget_exhausted`` as soon as two references were stale, which
+    blocked every prepare on a project with a handful of records.
+    """
+    reader, store, _, _entry = await _setup(tmp_path, read_token_limit=MIN_READ_TOKENS)
+    reader.begin_run("actor")
+    try:
+        reader.observe(
+            ToolObservation(
+                "file",
+                "read_file",
+                ToolStatus.SUCCEEDED,
+                effective_call=ToolCall("file", "read_file", {"path": "src/db/a.py"}),
+            )
+        )
+        # Ids must look like real proposals ("memory_" + 32 hex), because the
+        # envelope grows ~6 tokens per omission id and a short fixture id hid that.
+        references = tuple(
+            MemoryReference(f"memory_{index:032d}", 1, "0" * 64) for index in range(missing)
+        )
+        observed = await _runtime(reader).execute(
+            ToolCall(
+                "read",
+                "read_memory",
+                {
+                    "references": [
+                        {
+                            "entry_id": ref.entry_id,
+                            "expected_revision": ref.expected_revision,
+                            "expected_content_sha256": ref.expected_content_sha256,
+                        }
+                        for ref in references
+                    ]
+                },
+            ),
+            "actor",
+            1,
+        )
+        assert observed.status is ToolStatus.SUCCEEDED
+        assert isinstance(observed.result, dict)
+        assert observed.result["entries"] == []
+        omissions = observed.result["omissions"]
+        assert isinstance(omissions, list)
+        assert len(omissions) == missing
+    finally:
+        reader.end_run("actor")
+        await store.close()

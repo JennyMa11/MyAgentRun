@@ -25,7 +25,6 @@ from myagentrun.domain.memory import (
     MAX_MEMORY_ERROR_CHARS,
     MAX_MEMORY_PATH_CHARS,
     MAX_MEMORY_PATHS,
-    MAX_PROJECT_ENTRIES,
     MemoryConfig,
     MemoryEntry,
     MemoryKind,
@@ -105,7 +104,12 @@ class MemoryService:
                 read_token_limit=config.read_token_limit,
                 events=events,
                 forbidden_content_sha256=forbidden_content_sha256,
+                selector=config.retrieval_selector,
             )
+            # Checked here rather than only in the composition root: the operator
+            # CLI also builds this service, and an unusable limit must fail at
+            # construction on every entry point, not on the first model step.
+            self.reader.validate_output_limits()
 
     @property
     def forbidden_content_sha256(self) -> tuple[str, ...]:
@@ -337,6 +341,61 @@ class MemoryService:
             return None
         return self._selection
 
+    def _selected_query(
+        self, run_id: str, paths: tuple[str, ...], error_type: str | None
+    ) -> tuple[tuple[str, ...], str | None] | None:
+        query = (tuple(sorted(set(paths))), error_type)
+        if self._active_run != run_id or query != self._query:
+            return None
+        return query
+
+    async def refresh(
+        self, run_id: str, *, paths: tuple[str, ...] = (), error_type: str | None = None
+    ) -> MemorySelection | None:
+        """Recheck current authority so a revoked record leaves the next request.
+
+        The candidate set stays frozen for the run: records added after the first
+        retrieval are not pulled in here. What changes is that "frozen" no longer
+        means "still committed" — a record another maintainer revised, rejected or
+        superseded stops being exposed, and the run keeps its own snapshot only for
+        identity comparison.
+        """
+        query = self._selected_query(run_id, paths, error_type)
+        selection = self._selection
+        if query is None or selection is None:
+            return None
+        token = self._run_token
+        try:
+            current = await self._store.snapshot(self._project_id)
+            by_id = {entry.entry_id: entry for entry in current}
+            usable: list[MemoryEntry] = []
+            omissions = list(selection.omissions)
+            for entry in selection.entries:
+                if by_id.get(entry.entry_id) != entry:
+                    omissions.append(MemoryOmission(entry.entry_id, "memory_not_available"))
+                    continue
+                try:
+                    await self._fresh_source(entry)
+                except (ToolError, MemoryEvidenceError, MemoryValidationError) as exc:
+                    omissions.append(MemoryOmission(entry.entry_id, exc.code))
+                else:
+                    usable.append(entry)
+            if self._run_token is not token or self._active_run != run_id:
+                raise ToolError("memory_run_mismatch", "memory_run_mismatch")
+            refreshed = MemorySelection(
+                tuple(usable),
+                tuple(sorted(omissions, key=lambda item: (item.entry_id, item.reason))),
+            )
+            if self._query != query:
+                # Another call replaced the selection while this recheck was in
+                # flight.  Its result is newer; do not overwrite it and do not claim
+                # a selection for a query this run no longer holds.
+                return self._selection
+            self._selection = refreshed
+            return refreshed
+        except (MemoryValidationError, MemoryStoreError) as exc:
+            raise ToolError(exc.code, exc.code) from None
+
     async def retrieve(
         self, run_id: str, *, paths: tuple[str, ...] = (), error_type: str | None = None
     ) -> MemorySelection:
@@ -344,9 +403,19 @@ class MemoryService:
             raise ToolError("memory_run_mismatch", "memory_run_mismatch")
         token = self._run_token
         try:
-            snapshot = self._snapshot
-            if snapshot is None:
-                snapshot = await self._store.snapshot(self._project_id)
+            staged = self._snapshot
+            if staged is None:
+                staged = current = await self._store.snapshot(self._project_id)
+            else:
+                # "Frozen" bounds which candidates this run may consider; it never
+                # means "still authoritative".  A query change re-selects from the
+                # frozen set, so without this recheck a record revoked by another
+                # maintainer came back into the request on exactly that step.
+                current = await self._store.snapshot(self._project_id)
+            current_by_id = {entry.entry_id: entry for entry in current}
+            snapshot = tuple(
+                entry for entry in staged if current_by_id.get(entry.entry_id) == entry
+            )
             selected = select_memory(
                 snapshot,
                 project_id=self._project_id,
@@ -354,8 +423,13 @@ class MemoryService:
                 paths=paths,
                 error_type=error_type,
             )
+            revoked = tuple(
+                MemoryOmission(entry.entry_id, "memory_not_available")
+                for entry in staged
+                if current_by_id.get(entry.entry_id) != entry
+            )
             usable: list[MemoryEntry] = []
-            omissions = list(selected.omissions)
+            omissions = [*selected.omissions, *revoked]
             for entry in selected.entries:
                 try:
                     await self._fresh_source(entry)
@@ -520,6 +594,34 @@ class MemoryService:
         if validate_note_evidence(proposed, evidence).proposal_sha256 != entry.proposal_sha256:
             raise ToolError("memory_evidence_changed", "memory_evidence_changed")
 
+    def _remember_policy(self, entry_id: str) -> None:
+        """Bind this run's observed material to a proposal that actually persisted.
+
+        Registration happens after a successful write, so a failing store cannot
+        consume the quota, and the dict stays bounded by the store's own per-project
+        entry cap. Nothing is evicted to make room: dropping a guard would silently
+        weaken the raw-material protection of a record that still exists.
+        """
+        if self._run_policy is None:
+            raise ToolError("memory_run_mismatch", "memory_run_mismatch")
+        self._entry_policies[entry_id] = self._run_policy.copy()
+
+    async def _remember_if_persisted(self, entry: MemoryEntry) -> None:
+        """A durable write reported as failed still needs its guard.
+
+        Publication can succeed and then fail to notify the caller. Treating that
+        as "nothing was stored" left the record in place but unguarded, so the same
+        run could wrap the same raw material again.
+        """
+        if entry.entry_id in self._entry_policies or self._run_policy is None:
+            return
+        try:
+            stored = await self._store.get(self._project_id, entry.entry_id)
+        except (MemoryStoreError, ToolError):
+            return
+        if stored is not None:
+            self._remember_policy(entry.entry_id)
+
     async def propose(  # noqa: PLR0913 - explicit summary fields, scope is not caller input
         self,
         run_id: str,
@@ -550,11 +652,12 @@ class MemoryService:
             if self._run_policy is None:
                 raise ToolError("memory_run_mismatch", "memory_run_mismatch")
             self._run_policy.check(content)
-            if len(self._entry_policies) >= MAX_PROJECT_ENTRIES:
-                raise ToolError("memory_source_guard_limit", "memory_source_guard_limit")
-            self._entry_policies[entry.entry_id] = self._run_policy.copy()
-            return await self._store.create(entry)
+            stored = await self._store.create(entry)
+            self._remember_policy(entry.entry_id)
+            return stored
         except (MemoryValidationError, MemoryStoreError) as exc:
+            if exc.code == "memory_committed_notification_failed":
+                await self._remember_if_persisted(entry)
             raise ToolError(exc.code, exc.code) from None
 
     async def _history_store(self, *, require_enabled: bool = True) -> MemoryHistoryStore:
@@ -688,11 +791,12 @@ class MemoryService:
             ):
                 self._run_policy.check(value)
             await self._check_note_sources(entry)
-            if len(self._entry_policies) >= MAX_PROJECT_ENTRIES:
-                raise ToolError("memory_source_guard_limit", "memory_source_guard_limit")
-            self._entry_policies[entry.entry_id] = self._run_policy.copy()
-            return await self._store.create(entry)
+            stored = await self._store.create(entry)
+            self._remember_policy(entry.entry_id)
+            return stored
         except (MemoryValidationError, MemoryStoreError, MemoryEvidenceError) as exc:
+            if exc.code == "memory_committed_notification_failed":
+                await self._remember_if_persisted(entry)
             raise ToolError(exc.code, exc.code) from None
 
 

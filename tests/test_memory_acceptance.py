@@ -2,6 +2,7 @@
 
 import io
 import json
+import re
 import runpy
 import tarfile
 from dataclasses import asdict
@@ -13,7 +14,13 @@ from typing import Any, cast
 import pytest
 
 from myagentrun.adapters import JsonlTraceWriter, ScriptedModel
-from myagentrun.benchmark.memory_study import MemoryArm, memory_study_options, study_protocol
+from myagentrun.benchmark.memory_study import (
+    GLM_ROUTE_CREDENTIAL_ENV,
+    GLM_ROUTE_PROTOCOL_PATH,
+    MemoryArm,
+    memory_study_options,
+    study_protocol,
+)
 from myagentrun.composition import RuntimeOptions, build_local_runtime
 from myagentrun.domain import ModelCallError, ModelRequest, ModelResponse, TokenUsage, ToolCall
 from myagentrun.evaluation.extension_comparison import ComparisonRun
@@ -104,7 +111,7 @@ async def test_p503_505_proposal_review_then_fixture_commit_cannot_authorize_rea
     _, _, configs = await mod.checked_seed(snapshot, committed, real=False)
     assert configs["original"].project_id == configs["consolidated"].project_id
     with pytest.raises(mod.StudyError, match="explicit_user_seed_approval_required"):
-        await mod.run(snapshot, committed, tmp_path / "real_execution", provider="deepseek")
+        await mod.run(snapshot, committed, tmp_path / "real_execution", provider="glm")
     assert not (tmp_path / "real_execution").exists()
     assert not (committed / "real_queue_reserved.json").exists()
     assert mod.read(prepared / "review.json")["selected"]["status"] == "proposed"
@@ -456,7 +463,7 @@ async def test_p504_missing_key_or_previous_attempt_stops_before_output(
 
         monkeypatch.setitem(mod.prepare.__globals__, "model_for", forbidden_provider)
     reason = (
-        "deepseek_credentials_required"
+        "model_credentials_required:DEEPSEEK_API_KEY"
         if condition == "credentials"
         else "real_consolidation_already_reserved"
     )
@@ -473,8 +480,13 @@ async def test_p504_missing_key_or_previous_attempt_stops_before_output(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("protocol", "provider"),
+    [(None, "deepseek"), (ROOT / GLM_ROUTE_PROTOCOL_PATH, "glm")],
+    ids=["v1-deepseek", "v2-glm"],
+)
 async def test_p504_505_controlled_provider_branch_audits_and_reserves_one_attempt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, protocol: Path | None, provider: str
 ) -> None:
     mod = _module()
     fixtures = runpy.run_path(str(ROOT / "tests/test_extension_acceptance.py"))
@@ -482,7 +494,7 @@ async def test_p504_505_controlled_provider_branch_audits_and_reserves_one_attem
     source_root.mkdir()
     source = await fixtures["prepared_seed_fixture"](source_root)
     snapshot = tmp_path / "snapshot"
-    mod.plan(snapshot)
+    mod.plan(snapshot, protocol)
     _preflight_fixture(mod, snapshot, tmp_path / "preflight")
     model = ScriptedModel(
         [
@@ -519,7 +531,7 @@ async def test_p504_505_controlled_provider_branch_audits_and_reserves_one_attem
         snapshot,
         source,
         output,
-        provider="deepseek",
+        provider=provider,
         credentials=None,
         preflight=tmp_path / "preflight",
     )
@@ -532,7 +544,7 @@ async def test_p504_505_controlled_provider_branch_audits_and_reserves_one_attem
             snapshot,
             source,
             tmp_path / "second_attempt",
-            provider="deepseek",
+            provider=provider,
             credentials=None,
             preflight=tmp_path / "preflight",
         )
@@ -595,3 +607,67 @@ async def test_p507_report_retains_slot_and_unknown_usage_when_witness_is_missin
     assert report["evidence_index"]["0"]["usage_witness_sha256"] is None
     metadata = report["served_model_metadata"]["Baseline"]
     assert metadata["unknown_provider_models"] == metadata["responses"] == 1
+
+
+@pytest.mark.asyncio
+async def test_p501_v2_route_reads_its_own_credential_and_never_the_v1_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A key for the wrong provider must not authorize a v2 run.
+
+    The credential names live in the frozen route, so a v2 snapshot that only has
+    `DEEPSEEK_API_KEY` available has to fail closed instead of silently calling
+    the v2 endpoint with a credential the v1 route owns.
+    """
+    mod = _module()
+    v2 = study_protocol(ROOT / GLM_ROUTE_PROTOCOL_PATH)
+    monkeypatch.delenv(GLM_ROUTE_CREDENTIAL_ENV, raising=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "v1-only-key")
+    file = tmp_path / "credentials.env"
+    file.write_text("DEEPSEEK_API_KEY=v1-only-key\n")
+    with pytest.raises(
+        mod.StudyError, match=f"model_credentials_required:{GLM_ROUTE_CREDENTIAL_ENV}"
+    ):
+        mod.model_for(v2, file)
+
+    file.write_text(f"{GLM_ROUTE_CREDENTIAL_ENV}=v2-key\n")
+    model = mod.model_for(v2, file)
+    assert model is not None
+
+
+def test_p505_instruction_states_the_budget_the_tool_enforces() -> None:
+    """The prompt must quote the real remaining bytes, not a character guess.
+
+    A real GLM run lost every proposal to `memory_note_limit` while the prompt gave
+    only per-field character counts: the source references are attached twice, so
+    only a few hundred bytes are left for the text (one attempt missed by 17 bytes).
+    The number is therefore derived from the same domain objects that reject the
+    write, and the instruction must quote exactly that number.
+    """
+    mod = _module()
+    assert mod.remaining_note_bytes(1) > mod.remaining_note_bytes(2) > mod.remaining_note_bytes(3)
+    for sources in (1, 2, 3):
+        instruction = mod.consolidation_instruction(sources)
+        free = mod.remaining_note_bytes(sources)
+        assert f"Only {free} bytes remain" in instruction
+        assert f"the {sources} source references" in instruction
+        assert "2048-byte note body" in instruction
+        assert "memory_note_limit" in instruction
+        # The suggested field ceilings must themselves fit the quoted budget.
+        limits = [int(n) for n in re.findall(r"<= (\d+) bytes", instruction)]
+        assert limits, "the instruction quotes no byte ceiling"
+        assert sum(limits) <= free, (limits, free)
+    assert "Only 245 bytes remain" in mod.INSTRUCTION
+
+
+@pytest.mark.parametrize("provider", ["deepseek", "glm"])
+def test_p508_report_marks_a_real_route_as_real(provider: str) -> None:
+    """A real cohort must not be reported as fixture.
+
+    The report gate compared the provider against the literal "deepseek", so a fully
+    real GLM cohort was labelled `real_model_results: false` and its benefit
+    evaluation stayed blocked even though every slot had provider invocations.
+    """
+    mod = _module()
+    assert provider in mod.REAL_PROVIDERS
+    assert "scripted" not in mod.REAL_PROVIDERS

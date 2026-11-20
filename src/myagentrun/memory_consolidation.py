@@ -42,6 +42,17 @@ class _Fact(_Input):
         )
 
 
+# Upper bound for an explicit consolidation wall clock.  It exists so a measured
+# slow route can be pinned without editing the tool per provider; the default and
+# the frozen v1 protocol remain 30 s.
+MAX_CONSOLIDATION_SECONDS = 600.0
+# The wrapper is a last-resort guard, not the run's budget: it must outlive every
+# legal inner budget plus bounded cleanup, or a valid 240 s route is cancelled by
+# its own caller and reports `tool_timeout` instead of a receipt.
+CLEANUP_SECONDS = 30.0
+OUTER_TIMEOUT_SECONDS = MAX_CONSOLIDATION_SECONDS + CLEANUP_SECONDS
+
+
 class _Arguments(_Input):
     materials_authorized: Literal[True]
     redacted: Literal[True]
@@ -50,7 +61,9 @@ class _Arguments(_Input):
     max_steps: int = Field(default=12, ge=1, le=12)
     max_tool_calls: int = Field(default=16, ge=1, le=16)
     max_tokens: int = Field(default=8000, ge=1, le=8000)
-    max_duration_seconds: float = Field(default=30.0, gt=0, le=30.0)
+    # The default stays 30 s for the pinned v1 route.  A slower frozen route may
+    # raise it up to MAX_CONSOLIDATION_SECONDS; nothing else about the budget moves.
+    max_duration_seconds: float = Field(default=30.0, gt=0, le=MAX_CONSOLIDATION_SECONDS)
 
     @field_validator("materials_authorized", "redacted", mode="before")
     @classmethod
@@ -255,7 +268,7 @@ class ConsolidateMemoryTool:
                 "memory.propose",
                 "memory.evidence.read",
             ),
-            timeout_seconds=35.0,
+            timeout_seconds=OUTER_TIMEOUT_SECONDS,
             approval_required=False,
         )
 

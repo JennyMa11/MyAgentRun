@@ -78,9 +78,51 @@ class _Budget(_Strict):
     max_duration_seconds: float = Field(gt=0)
 
 
+# A v2 protocol swaps only the model route, because the credential issued for this
+# run does not authorize the v1 route.  The values live here rather than being read
+# from the protocol file: a protocol that could name its own endpoint and model would
+# be able to widen its own scope, so the file is checked against these constants and
+# never trusted as the source of them.
+GLM_ROUTE_MODEL: dict[str, Any] = {
+    "adapter": "existing OpenAICompatibleModel",
+    "id": "glm-5.3-flash",
+    "endpoint": "https://moerouter.com/v1/chat/completions",
+    "temperature": 0,
+    "thinking": False,
+    "max_output_tokens": 1024,
+    "response_version": "record if supplied; unavailable before request",
+    "max_attempts": 1,
+    "require_usage": True,
+}
+GLM_ROUTE_CREDENTIAL_ENV = "MOEROUTER_API_KEY"
+# Measured on 2026-11-19: one GLM completion took 103 s (others 6 s), so the v1
+# 30-second consolidation deadline cannot hold on this route.  Only the wall clock
+# changes; steps, tools and tokens stay identical to v1.
+GLM_ROUTE_CONSOLIDATION_SECONDS = 240.0
+GLM_ROUTE_PROTOCOL_ID = "memory_v2_p5_v2"
+GLM_ROUTE_PROTOCOL_PATH = "benchmarks/memory_v2/p5-protocol-v2.json"
+GLM_ROUTE_MATRIX_PATH = "docs/memory-v2-p5-matrix-v2.json"
+PROTOCOLS: dict[str, dict[str, Any]] = {
+    "memory_v2_p5_v1": {
+        "path": "benchmarks/memory_v2/p5-protocol.json",
+        "matrix": "docs/memory-v2-p5-matrix.json",
+        "credential_env": "DEEPSEEK_API_KEY",
+        "provider": "deepseek",
+        "model": None,
+    },
+    GLM_ROUTE_PROTOCOL_ID: {
+        "path": GLM_ROUTE_PROTOCOL_PATH,
+        "matrix": GLM_ROUTE_MATRIX_PATH,
+        "credential_env": GLM_ROUTE_CREDENTIAL_ENV,
+        "provider": "glm",
+        "model": GLM_ROUTE_MODEL,
+    },
+}
+
+
 class _Protocol(_Strict):
     schema_version: Literal["1.0"]
-    protocol_id: Literal["memory_v2_p5_v1"]
+    protocol_id: Literal["memory_v2_p5_v1", "memory_v2_p5_v2"]
     source_suite: Literal["benchmarks/extension_v1/offline.json"]
     model: dict[str, Any]
     isolation: dict[str, Any]
@@ -135,7 +177,11 @@ class _Protocol(_Strict):
                 "max_steps": 12,
                 "max_tokens": 8000,
                 "max_tool_calls": 16,
-                "max_duration_seconds": 30.0,
+                "max_duration_seconds": (
+                    GLM_ROUTE_CONSOLIDATION_SECONDS
+                    if self.protocol_id == GLM_ROUTE_PROTOCOL_ID
+                    else 30.0
+                ),
             }
             or self.analysis.get("seed") != SEED
             or self.analysis.get("resamples") != RESAMPLES
@@ -149,11 +195,15 @@ class _Protocol(_Strict):
 
 def study_protocol(path: Path | None = None) -> dict[str, Any]:
     """Read a strictly checked protocol; no provider, secret or execution side effects."""
-    selected = path or STUDY_ROOT / "benchmarks/memory_v2/p5-protocol.json"
+    selected = path or STUDY_ROOT / PROTOCOLS["memory_v2_p5_v1"]["path"]
     protocol = _Protocol.model_validate_json(selected.read_bytes())
+    route = PROTOCOLS[protocol.protocol_id]
     baseline = json.loads((STUDY_ROOT / "benchmarks/extension_v1/manifest.json").read_bytes())
+    expected_model = route["model"] or (
+        baseline["model"] | {"max_attempts": 1, "require_usage": True}
+    )
     if json.dumps(protocol.model, sort_keys=True) != json.dumps(
-        baseline["model"] | {"max_attempts": 1, "require_usage": True}, sort_keys=True
+        expected_model, sort_keys=True
     ) or json.dumps(protocol.isolation, sort_keys=True) != json.dumps(
         baseline["isolation"], sort_keys=True
     ):
@@ -162,3 +212,11 @@ def study_protocol(path: Path | None = None) -> dict[str, Any]:
     if {r.case_id for r in protocol.queue} != {t.task_id for t in tasks}:
         raise ValueError("memory_study_tasks_changed")
     return protocol.model_dump(mode="json")
+
+
+def protocol_route(protocol: dict[str, Any]) -> dict[str, Any]:
+    """Return the frozen path, matrix and credential name for a checked protocol."""
+    try:
+        return PROTOCOLS[str(protocol["protocol_id"])]
+    except KeyError:
+        raise ValueError("memory_study_protocol_route_unknown") from None

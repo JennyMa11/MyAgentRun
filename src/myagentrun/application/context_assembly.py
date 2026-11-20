@@ -359,7 +359,7 @@ class ContextAssembly:
             calls += 1
         paths, error_type = memory_query(history) if self._memory is not None else ((), None)
         memory = (
-            self._memory.selection_for(run_id, paths=paths, error_type=error_type)
+            await self._memory.refresh(run_id, paths=paths, error_type=error_type)
             if self._memory is not None
             else None
         )

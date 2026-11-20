@@ -1,0 +1,228 @@
+{
+  "schema_version": "1.0",
+  "case_set_id": "memory_retrieval_gold_v1",
+  "frozen_on": "2026-11-19",
+  "scope": "Approved project-memory discovery only. These queries ask what an engineer would type after seeing a symptom, not the note's own wording. Tasks, grades and hidden criteria are not used.",
+  "corpus_version": "v1",
+  "project_id": "gold_project",
+  "applicable_version": "v1",
+  "queries": [
+    {
+      "query_id": "q01",
+      "query": "pytest hangs and never finishes",
+      "gold": [
+        "g_hang_timeout"
+      ],
+      "note": "symptom phrasing; the note itself says 'timeout' and 'never returns'"
+    },
+    {
+      "query_id": "q02",
+      "query": "SQLite database is locked when two runs overlap",
+      "gold": [
+        "g_sqlite_lock"
+      ],
+      "note": "near-verbatim symptom, tests exact-term routing"
+    },
+    {
+      "query_id": "q03",
+      "query": "import fails after adding a new package",
+      "gold": [
+        "g_lockfile_sync"
+      ],
+      "note": "symptom mentions neither lockfile nor uv sync"
+    },
+    {
+      "query_id": "q04",
+      "query": "docker container cannot reach the network",
+      "gold": [
+        "g_docker_network"
+      ],
+      "note": "symptom; note speaks of egress and socket"
+    },
+    {
+      "query_id": "q05",
+      "query": "中文编码乱码",
+      "gold": [
+        "g_encoding"
+      ],
+      "note": "Han bigrams; the note is written in English about UTF-8 decoding"
+    },
+    {
+      "query_id": "q06",
+      "query": "approval prompt keeps asking twice",
+      "gold": [
+        "g_double_approval"
+      ],
+      "note": "symptom phrasing of a double-preflight bug"
+    },
+    {
+      "query_id": "q07",
+      "query": "flaky test passes alone and fails in the suite",
+      "gold": [
+        "g_test_isolation"
+      ],
+      "note": "symptom; note says 'shared state between cases'"
+    },
+    {
+      "query_id": "q08",
+      "query": "memory proposal rejected as sensitive",
+      "gold": [
+        "g_redaction"
+      ],
+      "note": "project-specific vocabulary, should be easy for both selectors"
+    },
+    {
+      "query_id": "q09",
+      "query": "artifact directory grows without bound",
+      "gold": [
+        "g_artifact_growth"
+      ],
+      "note": "symptom of unbounded tool output offload"
+    },
+    {
+      "query_id": "q10",
+      "query": "trace file is truncated after a crash",
+      "gold": [
+        "g_trace_truncation"
+      ],
+      "note": "symptom; note speaks of a partial JSONL line"
+    },
+    {
+      "query_id": "q11",
+      "query": "which files may the agent write",
+      "gold": [
+        "g_workspace_scope"
+      ],
+      "note": "policy question phrased as a question"
+    },
+    {
+      "query_id": "q12",
+      "query": "token budget exhausted too early",
+      "gold": [
+        "g_budget_overrun"
+      ],
+      "note": "vocabulary overlap with the mechanism name"
+    }
+  ],
+  "notes": [
+    {
+      "entry_id": "g_hang_timeout",
+      "topic": "hang_timeout",
+      "kind": "diagnosis",
+      "paths": [],
+      "error_type": "TimeoutError",
+      "content": "A process that never returns is almost always blocked on an unbounded wait rather than a slow computation. Reproduce with an explicit timeout and check whether the child process group is cleaned up before assuming the work itself is slow."
+    },
+    {
+      "entry_id": "g_sqlite_lock",
+      "topic": "sqlite_lock",
+      "kind": "diagnosis",
+      "paths": [
+        "src/db"
+      ],
+      "error_type": "OperationalError",
+      "content": "When two runs overlap, the SQLite adapter reports database is locked because it holds a directory advisory lock. Serialise the second run instead of retrying the write, and read back after the lock is released."
+    },
+    {
+      "entry_id": "g_lockfile_sync",
+      "topic": "lockfile_sync",
+      "kind": "environment",
+      "paths": [
+        "pyproject.toml",
+        "uv.lock"
+      ],
+      "error_type": null,
+      "content": "Adding a dependency without refreshing uv.lock makes the import fail in a frozen environment. Run uv sync so the lockfile matches pyproject, then re-import inside the project interpreter rather than the system one."
+    },
+    {
+      "entry_id": "g_docker_network",
+      "topic": "docker_egress",
+      "kind": "environment",
+      "paths": [
+        "docker"
+      ],
+      "error_type": "ConnectionRefusedError",
+      "content": "The default container has no egress and its network namespace carries no route, so any socket attempt fails before reaching the host. Grant a host, protocol and port explicitly when a check genuinely needs outbound traffic."
+    },
+    {
+      "entry_id": "g_encoding",
+      "topic": "utf8_decoding",
+      "kind": "diagnosis",
+      "paths": [
+        "src/myagentrun/infrastructure"
+      ],
+      "error_type": "UnicodeDecodeError",
+      "content": "Decode file bytes as UTF-8 with fatal error handling and read with O_NOFOLLOW, otherwise mixed encodings silently corrupt text and turn into replacement characters downstream."
+    },
+    {
+      "entry_id": "g_double_approval",
+      "topic": "double_preflight",
+      "kind": "repair",
+      "paths": [
+        "src/myagentrun/tools"
+      ],
+      "error_type": null,
+      "content": "A side-effecting tool ran preflight twice because the approval path re-prepared after a replay. Prepare once before requesting approval and reuse the frozen scope so the operator is not asked a second time."
+    },
+    {
+      "entry_id": "g_test_isolation",
+      "topic": "test_isolation",
+      "kind": "diagnosis",
+      "paths": [
+        "tests"
+      ],
+      "error_type": "AssertionError",
+      "content": "A case that passes alone but fails in the full suite is leaking shared state between cases. Check for module-level caches, a reused temporary directory or an unclosed store before changing the assertion."
+    },
+    {
+      "entry_id": "g_redaction",
+      "topic": "redaction_rejection",
+      "kind": "environment",
+      "paths": [
+        "src/myagentrun/domain"
+      ],
+      "error_type": null,
+      "content": "A proposal whose body or metadata matches the registered credential pattern is rejected before storage. Remove the secret from the text; the record is bound to the approved content hash and cannot be edited after approval."
+    },
+    {
+      "entry_id": "g_artifact_growth",
+      "topic": "artifact_growth",
+      "kind": "environment",
+      "paths": [
+        ".myagentrun"
+      ],
+      "error_type": null,
+      "content": "Oversized tool output is written to the artifact directory and never reclaimed automatically. Prune the run directories explicitly; artifacts are deliberately not fed back into context."
+    },
+    {
+      "entry_id": "g_trace_truncation",
+      "topic": "trace_truncation",
+      "kind": "diagnosis",
+      "paths": [
+        "src/myagentrun/evaluation"
+      ],
+      "error_type": "JSONDecodeError",
+      "content": "A crash can leave a partial JSONL line at the end of the trace. Read line by line and drop the trailing incomplete record instead of discarding the whole file."
+    },
+    {
+      "entry_id": "g_workspace_scope",
+      "topic": "workspace_scope",
+      "kind": "environment",
+      "paths": [
+        "src/myagentrun/infrastructure"
+      ],
+      "error_type": null,
+      "content": "Writes are confined to the resolved workspace root; absolute paths, parent traversal and symlink escapes are refused before any byte is written. The sandbox is a policy boundary, not an OS isolation layer."
+    },
+    {
+      "entry_id": "g_budget_overrun",
+      "topic": "budget_overrun",
+      "kind": "environment",
+      "paths": [
+        "src/myagentrun/application"
+      ],
+      "error_type": null,
+      "content": "Token budget is enforced after each response, so the last call can overshoot. Record nominal budget, actual usage and the overshoot, then stop issuing further calls rather than retrying under the same budget."
+    }
+  ]
+}

@@ -14,7 +14,7 @@ MyAgentRun 是一个供自己在终端使用的 **Coding Agent Harness / Runtime
 
 - 版本：`0.3.2`（Apache-2.0）；本页能力与评测说明更新至 2026-10-28。
 - 技术基线：Python `>=3.12`、`uv`、`src/` 布局；运行依赖包括 `pydantic`、流式 HTTP 的 `httpx` 和终端输入的 `prompt_toolkit`，MLX 与 MCP 为可选依赖。
-- 规模：117 个源码模块、68 个测试模块、1304 个测试、35 个 Benchmark 任务（`core` 25 + `repo` 6 + `hard` 4）。测试数量由完整 pytest 收集核对，不代表功能验收充分。
+- 规模：120 个源码模块、72 个测试模块、1419 个测试、35 个 Benchmark 任务（`core` 25 + `repo` 6 + `hard` 4）。测试数量由完整 pytest 收集核对，不代表功能验收充分。
 
 轻量 DSH 扩展现已提供可取消的 OpenAI-compatible 流式输出、逐次审批、稳定会话及历史分叉、
 配置驱动的 Python 插件组合、受控执行钩子和统一 local/Docker 文件与进程后端。
@@ -35,7 +35,7 @@ Context 对照观察到输入 Token 减少约 39.1%，尚未证明任务成功�
 - [扩展升级执行与验收主计划 v1](docs/extension-roadmap.md)：后续升级的固定范围、四个 PR、验收矩阵与停止条件。
 - [人工 Skills 与 Context](docs/extension-skills.md)：默认关闭、显式配置、按需加载与阶段验收边界。
 - [项目 Memory](docs/extension-memory.md)：私有存储、运行外维护与生产组装，默认关闭；出关结论见 [PR 4 报告](docs/results/extension-pr4-2026-10-30.md)。
-- [Memory v2 调研与设计](docs/memory-v2-design.md)：P0/P1 源码调研与设计；P2已[验收](docs/results/memory-v2-p2-2026-11-11.md)，配置见[使用说明](docs/memory-v2-usage.md)，P3进度见[执行记录](docs/memory-v2-execution.md)。
+- [Memory v2 调研与设计](docs/memory-v2-design.md)：P0/P1 源码调研与设计；P2、P3、P4 已分别[验收](docs/results/memory-v2-p2-2026-11-11.md)（结构化笔记与手动整理见[P3](docs/results/memory-v2-p3-2026-11-12.md)、[P4](docs/results/memory-v2-p4-2026-11-12.md)），配置见[使用说明](docs/memory-v2-usage.md)，P5 真实收益实验尚未验收，进度见[执行记录](docs/memory-v2-execution.md)。
 - [配对评测与 M5 门禁](docs/extension-evaluation.md)：固定 bootstrap、完整分母、Memory 机会与真实队列授权。
 - [M5 本轮最终报告](docs/results/extension-m5-2026-10-30.md)：按原预算停止，80/90 行已核验、6 个产物通过；未执行行和预算超量保留，机制收益不可评估。
 - [先在自己的终端里使用](#先在自己的终端里使用)
@@ -62,7 +62,7 @@ uv run myagentrun-work
 需要运行 Docker Desktop。首次启动自动构建开发镜像（需要下载依赖），随后
 复用镜像；依赖变更后使用 `uv run myagentrun-work --rebuild-image`。
 `uv run myagentrun-work --check` 只准备并检查配置，不调用模型。
-启动后 `/tools` 查看 13 项工具，写入和命令仍逐次审批，执行容器禁网。
+启动后 `/tools` 查看 14 项工具（含带上下文的正则 `grep`），写入和命令仍逐次审批，执行容器禁网。
 固定测试为 `uv run --no-sync pytest -q`，固定构建为 `uv build --no-build-isolation`；
 三个人工 Skills 来自 `examples/skills`。Memory 明确绑定 myagentrun/work_v1，
 默认在仓库父目录 `.myagentrun-private/myagentrun`，可用 `--memory-root /absolute/private/path`
@@ -843,7 +843,7 @@ uv run myagentrun chat --model-profile deepseek --multi-agent --subagent-max-par
 ## 工程门禁与文档
 
 工程检查使用 Ruff、mypy strict、pytest，测试包含 unit、integration、e2e。
-1304 个测试是当前收集规模，不是模型能力成绩；覆盖率与通过数也不能替代功能覆盖矩阵。
+1419 个测试是当前收集规模，不是模型能力成绩；覆盖率与通过数也不能替代功能覆盖矩阵。
 
 提高预算并扩大真实模型样本的实验见 [Harness v2 冻结设计](docs/harness-study-v2.md)。
 2026-10-28 新增 36 次公开函数任务回归及 72 次机制配对运行，全部 108 行保留，

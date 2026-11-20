@@ -200,6 +200,59 @@ def test_historical_results_are_not_gated_against_current_tree() -> None:
     assert REPO_ROOT / "docs/resume.md" in _COUNT_GATED_DOCS
 
 
+def test_adr_numbers_are_unique_and_indexed() -> None:
+    """Two ADRs cannot share a number.
+
+    A duplicate ADR number is worse than a missing one: `0031` resolved to the
+    rename decision *and* the progressive-memory decision, so a reader following
+    a citation landed on the wrong decision and nothing failed.  Records under
+    `docs/results/` keep their original citations, so the gate checks the live
+    ADR directory against its index instead of rewriting history.
+    """
+    adr_dir = REPO_ROOT / "docs" / "adr"
+    files = sorted(path for path in adr_dir.glob("[0-9][0-9][0-9][0-9]-*.md"))
+    assert files, "no ADRs found; the gate would pass vacuously"
+
+    by_number: dict[str, list[str]] = {}
+    for path in files:
+        by_number.setdefault(path.name[:4], []).append(path.name)
+    duplicates = {number: names for number, names in by_number.items() if len(names) > 1}
+    assert not duplicates, f"duplicate ADR numbers: {duplicates}"
+
+    index = _read(adr_dir / "README.md")
+    unindexed = [path.name for path in files if f"]({path.name})" not in index]
+    assert not unindexed, f"ADRs missing from docs/adr/README.md: {unindexed}"
+
+    stale = [
+        target
+        for target in re.findall(r"\]\((\d{4}-[^)]+\.md)\)", index)
+        if not (adr_dir / target).is_file()
+    ]
+    assert not stale, f"docs/adr/README.md links to missing ADRs: {stale}"
+
+
+def test_live_documents_have_no_broken_local_links() -> None:
+    """A renamed or deleted ADR must not leave citations dangling.
+
+    Historical `docs/results/` reports keep their original link targets on
+    purpose; this gate covers the documents a reader navigates today.
+    """
+    documents = [README, REPO_ROOT / "AGENTS.md", REPO_ROOT / "GLOSSARY.md"]
+    documents += [
+        path
+        for path in (REPO_ROOT / "docs").rglob("*.md")
+        if not path.is_relative_to(REPO_ROOT / "docs/results")
+    ]
+    broken = []
+    for path in documents:
+        for target in re.findall(r"\[[^\]]*\]\(([^)#\s]+)(?:#[^)]*)?\)", _read(path)):
+            if target.startswith(("http://", "https://", "mailto:", "#")):
+                continue
+            if not (path.parent / target).resolve().exists():
+                broken.append(f"{path.relative_to(REPO_ROOT)} -> {target}")
+    assert not broken, "live documents link to missing files: " + "; ".join(broken)
+
+
 def test_every_document_quotes_the_same_test_count(
     request: pytest.FixtureRequest,
 ) -> None:

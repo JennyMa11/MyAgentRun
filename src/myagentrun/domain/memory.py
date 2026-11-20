@@ -11,6 +11,7 @@ from enum import StrEnum
 from pathlib import PurePath, PurePosixPath
 from typing import Literal
 
+from myagentrun.domain.memory_ranking import DEFAULT_SELECTOR, SELECTORS, SelectorName
 from myagentrun.domain.redaction import redact_text
 
 MAX_MEMORY_BYTES = 2048
@@ -21,6 +22,13 @@ MAX_PROJECT_ENTRIES = 100
 MAX_RETRIEVED_ENTRIES = 5
 MAX_SOURCE_ID_CHARS = 128
 MAX_FORBIDDEN_MEMORY_SOURCES = 4096
+# A limit must be able to hold the worst envelope the reader can still return:
+# zero rows, every omission, and the truncation fields ``_fit`` adds.  Measured from
+# the fixed wrapper; below it ``_fit`` has nothing left to drop and raises, which
+# blocked the model request on every step.  The assembled tokenizer is rechecked
+# before the reader is used, so a costlier tokenizer fails at construction instead.
+MIN_INDEX_TOKENS = 216
+MIN_READ_TOKENS = 152
 _ID = re.compile(r"[a-z][a-z0-9_]{0,127}")
 _SHA = re.compile(r"[a-f0-9]{64}")
 
@@ -108,14 +116,17 @@ class MemoryConfig:
     index_token_limit: int = 512
     search_token_limit: int = 512
     read_token_limit: int = 2048
+    retrieval_selector: SelectorName = DEFAULT_SELECTOR
 
     def __post_init__(self) -> None:
+        if self.retrieval_selector not in SELECTORS:
+            raise MemoryValidationError("memory_selector_invalid")
         if self.retrieval_mode not in {"deterministic_v1", "progressive_v2"} or any(
-            type(value) is not int or not 1 <= value <= maximum
-            for value, maximum in (
-                (self.index_token_limit, 512),
-                (self.search_token_limit, 512),
-                (self.read_token_limit, 2048),
+            type(value) is not int or not minimum <= value <= maximum
+            for value, minimum, maximum in (
+                (self.index_token_limit, MIN_INDEX_TOKENS, 512),
+                (self.search_token_limit, MIN_INDEX_TOKENS, 512),
+                (self.read_token_limit, MIN_READ_TOKENS, 2048),
             )
         ):
             raise MemoryValidationError("memory_config_invalid")

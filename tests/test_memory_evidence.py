@@ -882,3 +882,166 @@ async def test_cancelled_evidence_io_releases_maintenance_without_starting_a_run
     service.begin_run("run_one")
     service.end_run("run_one")
     await store.close()
+
+
+async def _committed_fixture(tmp_path: Path) -> tuple[SQLiteMemoryStore, MemoryService, Path, Path]:
+    """Commit one record through the real maintenance chain and return its store."""
+    store, service, maintenance, proposal = await _maintenance_fixture(tmp_path)
+    await _commit_fixture_with_tools(maintenance, proposal)
+    return store, service, tmp_path / "workspace", tmp_path / "private"
+
+
+def _retrieval_assembly(service: MemoryService) -> ContextAssembly:
+    registry = ToolRegistry()
+    registry.register(RetrieveMemoryTool(service))
+    tools = ToolRuntime(
+        registry, PermissionPolicy(frozenset({"memory.read", "memory.evidence.read"})), EventBus()
+    )
+    return ContextAssembly(FullHistoryContext(), memory=service, tools=tools)
+
+
+@pytest.mark.parametrize("change", ["revise", "reject"])
+@pytest.mark.asyncio
+async def test_v1_withdraws_a_committed_record_revised_by_another_instance(
+    tmp_path: Path, change: str
+) -> None:
+    """A record another maintainer changed must leave the next derived request.
+
+    The run keeps its frozen candidate set, but "frozen" cannot mean "still
+    committed": otherwise a revoked rule keeps being injected until the run ends.
+    """
+    store, service, workspace, private = await _committed_fixture(tmp_path)
+    service.begin_run("run_two")
+    assembly = _retrieval_assembly(service)
+    history = (Message(Role.SYSTEM, "root constraint"), Message(Role.USER, "current task"))
+    try:
+        first = await assembly.prepare(history, "current task", "run_two", 1, 10)
+        assert any(message.name == "project_memory" for message in first.view.messages)
+
+        other_store = SQLiteMemoryStore(
+            private / "memory.sqlite3", allowed_root=private, workspace=workspace
+        )
+        other = MemoryService(other_store, project_id="project_one", applicable_version="v1")
+        current = await other_store.get("project_one", "memory_one")
+        assert current is not None
+        if change == "revise":
+            await other.revise(
+                "memory_one", expected_revision=1, content="Replacement rule still unverified."
+            )
+        else:
+            await other.reject("memory_one", expected_revision=1)
+        await other_store.close()
+
+        second = await assembly.prepare(history, "current task", "run_two", 2, 10)
+        assert not any(message.name == "project_memory" for message in second.view.messages)
+        assert "Inspect assertion inputs" not in str(second.view.messages)
+    finally:
+        service.end_run("run_two")
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_v1_keeps_an_unchanged_candidate_without_repeating_store_work(
+    tmp_path: Path,
+) -> None:
+    """Rechecking current authority must not silently drop a still-committed record."""
+    store, service, _workspace, _private = await _committed_fixture(tmp_path)
+    service.begin_run("run_two")
+    assembly = _retrieval_assembly(service)
+    history = (Message(Role.SYSTEM, "root constraint"), Message(Role.USER, "current task"))
+    try:
+        first = await assembly.prepare(history, "current task", "run_two", 1, 10)
+        second = await assembly.prepare(history, "current task", "run_two", 2, 10)
+        assert any(message.name == "project_memory" for message in second.view.messages)
+        assert [m.content for m in second.view.messages if m.name == "project_memory"] == [
+            m.content for m in first.view.messages if m.name == "project_memory"
+        ]
+    finally:
+        service.end_run("run_two")
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_v1_does_not_revive_a_revoked_record_when_the_query_changes(
+    tmp_path: Path,
+) -> None:
+    """Changing the query is not a reason to reuse a snapshot that no longer holds.
+
+    ``retrieve`` kept the first snapshot for the whole run. When the observed
+    paths changed, a fresh selection was made from that stale snapshot, so a record
+    another maintainer had revoked came back into the request on that step.
+    """
+    store, service, workspace, private = await _committed_fixture(tmp_path)
+    service.begin_run("run_two")
+    try:
+        first = await service.retrieve("run_two")
+        assert [entry.entry_id for entry in first.entries] == ["memory_one"]
+
+        other_store = SQLiteMemoryStore(
+            private / "memory.sqlite3", allowed_root=private, workspace=workspace
+        )
+        other = MemoryService(other_store, project_id="project_one", applicable_version="v1")
+        await other.reject("memory_one", expected_revision=1)
+        await other_store.close()
+
+        changed = await service.retrieve(
+            "run_two", paths=("src/value.py",), error_type="ValueError"
+        )
+        assert changed.entries == ()
+        assert [(item.entry_id, item.reason) for item in changed.omissions] == [
+            ("memory_one", "memory_not_available")
+        ]
+    finally:
+        service.end_run("run_two")
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_v1_still_selects_newly_applicable_knowledge_from_the_frozen_set(
+    tmp_path: Path,
+) -> None:
+    """Rechecking identity must not break a legitimate query change."""
+    store, service, maintenance, proposal = await _maintenance_fixture(
+        tmp_path, paths=("src/value.py",), error_type="AssertionError"
+    )
+    await _commit_fixture_with_tools(maintenance, proposal)
+    service.begin_run("run_two")
+    try:
+        assert (await service.retrieve("run_two")).entries == ()
+        changed = await service.retrieve(
+            "run_two", paths=("src/value.py",), error_type="AssertionError"
+        )
+        assert [entry.entry_id for entry in changed.entries] == ["memory_one"]
+    finally:
+        service.end_run("run_two")
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_a_slow_recheck_does_not_overwrite_a_newer_query_selection(
+    tmp_path: Path,
+) -> None:
+    """A recheck that finishes late must not reinstate a query the run has left.
+
+    ``prepare`` awaits these calls in order, so the interleaving is not reachable
+    from the loop today; a direct caller could still do it, and the failure mode
+    would be silently serving the wrong query's records.
+    """
+    store, service, _workspace, _private = await _committed_fixture(tmp_path)
+    service.begin_run("run_two")
+    try:
+        await service.retrieve("run_two")
+        slow = asyncio.create_task(
+            service.refresh("run_two", paths=("src/value.py",), error_type="ValueError")
+        )
+        await asyncio.sleep(0)
+        newer = await service.retrieve("run_two")
+        assert await slow is None
+        current = service.selection_for("run_two")
+        assert current is not None
+        assert [entry.entry_id for entry in current.entries] == [
+            entry.entry_id for entry in newer.entries
+        ]
+    finally:
+        service.end_run("run_two")
+        await store.close()

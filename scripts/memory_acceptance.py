@@ -28,19 +28,23 @@ from myagentrun.adapters.memory_evidence import JsonMemoryEvidenceSource
 from myagentrun.adapters.models import CredentialRedactingModel, OpenAICompatibleModel
 from myagentrun.benchmark.memory_study import (
     ARM_GROUPS,
+    PROTOCOLS,
     MemoryArm,
     memory_study_options,
+    protocol_route,
     study_protocol,
 )
 from myagentrun.benchmark.runner import BenchmarkManifest
 from myagentrun.domain import ModelCallError, ModelResponse, ToolCall, ToolStatus
 from myagentrun.domain.memory import (
+    MAX_MEMORY_BYTES,
     MemoryConfig,
     MemoryEvidenceFile,
     MemoryEvidenceGrant,
     MemoryStatus,
 )
 from myagentrun.domain.memory_notes import (
+    MemoryNote,
     MemoryNoteSource,
     parse_memory_note,
     validate_note_evidence,
@@ -65,14 +69,54 @@ from myagentrun.tools import PermissionPolicy, ToolRegistry, ToolRuntime
 ROOT = Path(__file__).resolve().parents[1]
 ext = SimpleNamespace(**runpy.run_path(str(ROOT / "scripts/extension_acceptance.py")))
 HASH = r"^[a-f0-9]{64}$"
-INSTRUCTION = (
-    "Propose exactly one concise environment policy derived only from the authorized notes. "
-    "Preserve their precondition, exception and exported API contracts; use the existing local "
-    "runtime and visible checks, and avoid network dependencies. Call propose_consolidated_note "
-    "with kind=environment and supersede_sources=true. Keep trigger <=20 characters, rule <=120 "
-    "characters and verification <=30, because full source references are added twice within the "
-    "2KiB envelope. Then finish. Do not validate or approve."
-)
+# Any non-scripted provider is a real network run; the label comes from the
+# frozen protocol route so an artifact cannot claim a provider it did not use.
+REAL_PROVIDERS = frozenset(route["provider"] for route in PROTOCOLS.values())
+PROVIDER_CHOICES = ("scripted", *sorted(REAL_PROVIDERS))
+
+
+def remaining_note_bytes(sources: int) -> int:
+    """Bytes left for the text fields once `sources` references are attached twice."""
+    reference = MemoryNoteSource("a" * 32, 1, "b" * 64, "c" * 64, "d" * 32)
+    empty = MemoryNote(trigger="x", rule="x", verification="x")
+    attached = MemoryNote(
+        trigger="x", rule="x", verification="x", sources=(reference,), supersedes=(reference,)
+    )
+    per_source = len(attached.to_content().encode()) - len(empty.to_content().encode())
+    return MAX_MEMORY_BYTES - (len(empty.to_content().encode()) + per_source * sources)
+
+
+def consolidation_instruction(sources: int = 3) -> str:
+    """State the real remaining byte budget, in bytes, with a safe skeleton.
+
+    Every source is attached twice (sources and supersedes) before the proposal
+    reaches the 2KiB limit, so with three sources only ~250 bytes remain for the
+    text.  A character count is not a byte budget: an earlier version said
+    "rule <=120 characters", and real GLM runs still overflowed on every attempt
+    (one by only 17 bytes).  The instruction therefore quotes the byte total, the
+    per-field ceiling that fits it, and an example shape that is known to fit.
+    """
+    free = remaining_note_bytes(sources)
+    per_field = max(1, free // 5)
+    return (
+        "Propose exactly one concise environment policy derived only from the authorized notes. "
+        "Preserve their precondition, exception and exported API contracts; use the existing "
+        "local runtime and visible checks, and avoid network dependencies. Call "
+        "propose_consolidated_note with kind=environment and supersede_sources=true, then "
+        "finish. Do not validate or approve. "
+        f"HARD LIMIT: the {sources} source references are added twice automatically and already "
+        f"consume most of the {MAX_MEMORY_BYTES}-byte note body. Only {free} bytes remain for "
+        "trigger+rule+verification+exceptions combined, measured as UTF-8 bytes of the "
+        "canonical JSON (quotes, commas and escapes all count, so plain characters are not "
+        "bytes). Stay clearly under that total, e.g. "
+        f"trigger <= {per_field} bytes, rule <= {per_field * 2} bytes, verification <= "
+        f"{max(1, per_field // 2)} bytes, and at most 2 exceptions of <= {max(1, per_field // 2)} "
+        "bytes each. Prefer short noun phrases over sentences: a rule near 200 bytes will be "
+        "rejected as memory_note_limit and nothing is stored."
+    )
+
+
+INSTRUCTION = consolidation_instruction()
 
 
 class StudyError(RuntimeError):
@@ -140,8 +184,14 @@ def source_inputs() -> dict[str, str]:
     }
 
 
-def plan(output: Path) -> dict[str, Any]:
-    protocol = study_protocol()
+def study_route(protocol: dict[str, Any]) -> dict[str, Any]:
+    """Return the frozen path/matrix/credential route for a checked protocol."""
+    return protocol_route(protocol)
+
+
+def plan(output: Path, protocol_path: Path | None = None) -> dict[str, Any]:
+    protocol = study_protocol(protocol_path)
+    route = study_route(protocol)
     files = source_inputs()
     output.mkdir(parents=True, exist_ok=False, mode=0o700)
     archive = output / "source.tar.gz"
@@ -160,6 +210,7 @@ def plan(output: Path) -> dict[str, Any]:
     manifest = {
         "schema_version": "1.0",
         "protocol": protocol,
+        "protocol_path": route["path"],
         "protocol_sha256": ext.digest(ext.canonical(protocol)),
         "source_files": files,
         "source_sha256": ext.digest(ext.canonical(files)),
@@ -172,9 +223,14 @@ def plan(output: Path) -> dict[str, Any]:
 
 def check(snapshot: Path, *, current: bool = True) -> dict[str, Any]:
     manifest = read(snapshot / "manifest.json")
-    if ext.canonical(manifest["protocol"]) != ext.canonical(study_protocol()):
+    recorded = manifest["protocol"]
+    protocol_id = str(recorded.get("protocol_id", ""))
+    if protocol_id not in PROTOCOLS:
         raise StudyError("frozen_protocol_changed")
-    if manifest["protocol_sha256"] != ext.digest(ext.canonical(manifest["protocol"])):
+    expected = study_protocol(ROOT / PROTOCOLS[protocol_id]["path"])
+    if ext.canonical(recorded) != ext.canonical(expected):
+        raise StudyError("frozen_protocol_changed")
+    if manifest["protocol_sha256"] != ext.digest(ext.canonical(recorded)):
         raise StudyError("protocol_hash_changed")
     files = manifest["source_files"]
     if manifest["source_sha256"] != ext.digest(ext.canonical(files)):
@@ -244,20 +300,25 @@ class AuditedCredentialModel(CredentialRedactingModel):
         return secret_audit(root, self._secret)
 
 
+def provider_label(provider: str, protocol: dict[str, Any]) -> str:
+    """Name who actually produced the completions, not which CLI word was typed."""
+    return "scripted" if provider == "scripted" else study_route(protocol)["provider"]
+
+
 def model_for(protocol: dict[str, Any], credentials: Path | None) -> Any:
+    route = study_route(protocol)
+    name = route["credential_env"]
     secret = ""
     if credentials is not None:
         for line in ext.read_seed_file(credentials).decode().splitlines():
-            name, separator, value = line.partition("=")
-            if separator and name.strip() == "DEEPSEEK_API_KEY":
+            key, separator, value = line.partition("=")
+            if separator and key.strip() == name:
                 secret = value.strip().strip("\"'")
     else:
-        selection = CredentialStore(ROOT, default_credentials_path()).resolve(
-            "DEEPSEEK_API_KEY", os.environ
-        )
+        selection = CredentialStore(ROOT, default_credentials_path()).resolve(name, os.environ)
         secret = selection.value or ""
     if not secret:
-        raise StudyError("deepseek_credentials_required")
+        raise StudyError("model_credentials_required:" + name)
     model = protocol["model"]
     return AuditedCredentialModel(
         OpenAICompatibleModel(
@@ -352,7 +413,8 @@ async def prepare(  # noqa: PLR0913 - explicit preparation inputs
     preflight: Path | None = None,
 ) -> dict[str, Any]:
     manifest = check(snapshot)
-    if provider == "deepseek":
+    label = provider_label(provider, manifest["protocol"])
+    if provider != "scripted":
         check_preflight(snapshot, preflight)
         reservation = snapshot / "real_consolidation_reserved.json"
         if reservation.exists() or reservation.is_symlink():
@@ -362,7 +424,7 @@ async def prepare(  # noqa: PLR0913 - explicit preparation inputs
     # Resolve credentials without issuing a completion before creating a real attempt.
     model = (
         model_for(manifest["protocol"], credentials)
-        if provider == "deepseek"
+        if provider != "scripted"
         else ScriptedModel(
             [
                 ModelResponse(
@@ -395,7 +457,7 @@ async def prepare(  # noqa: PLR0913 - explicit preparation inputs
         {
             "source_sha256": manifest["source_sha256"],
             "protocol_sha256": manifest["protocol_sha256"],
-            "provider": provider,
+            "provider": label,
             "status": "running",
             "budget": manifest["protocol"]["consolidation_budget"],
         },
@@ -403,7 +465,13 @@ async def prepare(  # noqa: PLR0913 - explicit preparation inputs
     model = UsageObservedModel(model)
     try:
         return await _prepare_materials(
-            snapshot, source_seed, output, manifest=manifest, model=model, provider=provider
+            snapshot,
+            source_seed,
+            output,
+            manifest=manifest,
+            model=model,
+            provider=provider,
+            label=label,
         )
     except BaseException as exc:
         save(
@@ -411,7 +479,7 @@ async def prepare(  # noqa: PLR0913 - explicit preparation inputs
             {
                 "source_sha256": manifest["source_sha256"],
                 "protocol_sha256": manifest["protocol_sha256"],
-                "provider": provider,
+                "provider": label,
                 "status": "cancelled" if isinstance(exc, asyncio.CancelledError) else "failed",
                 "error_type": type(exc).__name__,
                 "model_usage": model.usage,
@@ -431,6 +499,7 @@ async def _prepare_materials(  # noqa: PLR0913, PLR0915 - ordered private materi
     manifest: dict[str, Any],
     model: UsageObservedModel,
     provider: str,
+    label: str,
 ) -> dict[str, Any]:
     (output / "original").mkdir(mode=0o700)
     (output / "audit_workspace").mkdir(mode=0o700)
@@ -442,7 +511,7 @@ async def _prepare_materials(  # noqa: PLR0913, PLR0915 - ordered private materi
         output / "candidate/memory.sqlite3",
         ext.read_seed_file(Path(original.database), pin(Path(original.database))),
     )
-    if provider == "deepseek":
+    if provider != "scripted":
         audit = model.audit(output / "original")
         audit_source = model.audit(snapshot)
         save(output / "input_secret_audit.json", {"corpus": audit, "source": audit_source})
@@ -472,7 +541,9 @@ async def _prepare_materials(  # noqa: PLR0913, PLR0915 - ordered private materi
             bus,
             max_output_chars=20000,
         )
-        if provider == "deepseek":
+        if provider != "scripted":
+            # The one-attempt reservation is checked above for every real provider.
+            # Writing it only for "deepseek" silently disabled the rule on v2 routes.
             ext.write_private(
                 snapshot / "real_consolidation_reserved.json",
                 ext.canonical(
@@ -523,7 +594,7 @@ async def _prepare_materials(  # noqa: PLR0913, PLR0915 - ordered private materi
             "schema_version": "1.0",
             "protocol_sha256": manifest["protocol_sha256"],
             "source_sha256": manifest["source_sha256"],
-            "provider": provider,
+            "provider": label,
             "original": [
                 {**asdict(e), **binding(e), "proposal_sha256": e.proposal_sha256} for e in before
             ],
@@ -560,7 +631,7 @@ async def _prepare_materials(  # noqa: PLR0913, PLR0915 - ordered private materi
         {
             "source_sha256": manifest["source_sha256"],
             "protocol_sha256": manifest["protocol_sha256"],
-            "provider": provider,
+            "provider": label,
             "status": "proposed_review_ready",
             "usage": preparation_usage(output, review),
         },
@@ -568,7 +639,7 @@ async def _prepare_materials(  # noqa: PLR0913, PLR0915 - ordered private materi
     save(output / "authorization-template.json", authority_template(output, review))
     preparation = {
         "schema_version": "1.0",
-        "provider": provider,
+        "provider": label,
         "protocol_sha256": manifest["protocol_sha256"],
         "source_sha256": manifest["source_sha256"],
         "review_sha256": pin(output / "review.json"),
@@ -638,7 +709,7 @@ async def authorize(  # noqa: PLR0915 - ordered immutable seed publication
             raise StudyError("fixture_authorization_scope_mismatch")
     elif (
         authority.authorization_kind != "explicit_user_approval"
-        or preparation["provider"] != "deepseek"
+        or preparation["provider"] not in REAL_PROVIDERS
         or "fixture" in authority.approved_by.lower()
     ):
         raise StudyError("real_seed_preparation_and_explicit_approval_required")
@@ -817,7 +888,7 @@ async def checked_seed(  # noqa: PLR0912 - verify both frozen corpora before pro
         raise StudyError("approved_binding_scope_changed")
     if real and (
         authority.authorization_kind != "explicit_user_approval"
-        or seed["preparation_provider"] != "deepseek"
+        or seed["preparation_provider"] not in REAL_PROVIDERS
         or seed["authorization_kind"] != "explicit_user_approval"
         or "fixture" in authority.approved_by.lower()
     ):
@@ -1110,7 +1181,7 @@ async def run(  # noqa: PLR0913, PLR0912, PLR0915 - fixed sequential cohort life
     credentials: Path | None = None,
     preflight: Path | None = None,
 ) -> dict[str, Any]:
-    real = provider == "deepseek"
+    real = provider != "scripted"
     frozen, seed, configs = await checked_seed(snapshot, bundle, real=real)
     if real:
         check_preflight(snapshot, preflight)
@@ -1155,7 +1226,7 @@ async def run(  # noqa: PLR0913, PLR0912, PLR0915 - fixed sequential cohort life
         "source_sha256": frozen["source_sha256"],
         "protocol_sha256": frozen["protocol_sha256"],
         "seed_sha256": pin(bundle / "seed.json"),
-        "provider": provider,
+        "provider": provider_label(provider, protocol),
         "status": "running",
         "declared_slots": len(protocol["queue"]),
         "checked_slots": 0,
@@ -1464,8 +1535,10 @@ def report(snapshot: Path, execution_root: Path, output: Path) -> dict[str, Any]
                 )
             },
         }
+    # Any frozen real route counts; a literal "deepseek" check silently reported a
+    # fully real GLM cohort as fixture, which then blocked benefit evaluation.
     real = (
-        execution["provider"] == "deepseek"
+        execution["provider"] in REAL_PROVIDERS
         and sum(r["provider_invocations"] for r in execution["rows"]) > 0
     )
     comparison = study_comparison(
@@ -1560,7 +1633,8 @@ async def preflight_command(
 
 async def contract_probes(snapshot: Path, output: Path) -> dict[str, Any]:
     frozen = check(snapshot)
-    matrix = read(ROOT / "docs/memory-v2-p5-matrix.json")
+    matrix_path = ROOT / study_route(frozen["protocol"])["matrix"]
+    matrix = read(matrix_path)
     collection = await preflight_command(
         ("uv", "run", "pytest", "--collect-only", "-q", *matrix["component_selection"]),
         ROOT,
@@ -1575,7 +1649,7 @@ async def contract_probes(snapshot: Path, output: Path) -> dict[str, Any]:
     result = {
         "source_sha256": frozen["source_sha256"],
         "protocol_sha256": frozen["protocol_sha256"],
-        "matrix_sha256": pin(ROOT / "docs/memory-v2-p5-matrix.json"),
+        "matrix_sha256": pin(matrix_path),
         "collection": collection,
         "declared_nodes": nodes,
         "rows": [],
@@ -1688,13 +1762,14 @@ def main() -> int:  # noqa: PLR0915 - explicit study subcommands
     commands = parser.add_subparsers(dest="command", required=True)
     freezing = commands.add_parser("plan")
     freezing.add_argument("--output", type=Path, required=True)
+    freezing.add_argument("--protocol", type=Path, help="frozen protocol; default v1")
     checking = commands.add_parser("check")
     checking.add_argument("--snapshot", type=Path, required=True)
     preparing = commands.add_parser("prepare")
     preparing.add_argument("--snapshot", type=Path, required=True)
     preparing.add_argument("--source-seed", type=Path, required=True)
     preparing.add_argument("--output", type=Path, required=True)
-    preparing.add_argument("--provider", choices=("scripted", "deepseek"), default="scripted")
+    preparing.add_argument("--provider", choices=PROVIDER_CHOICES, default="scripted")
     preparing.add_argument("--credentials", type=Path)
     preparing.add_argument("--preflight", type=Path)
     approval = commands.add_parser("authorize")
@@ -1707,7 +1782,7 @@ def main() -> int:  # noqa: PLR0915 - explicit study subcommands
     running.add_argument("--snapshot", type=Path, required=True)
     running.add_argument("--bundle", type=Path, required=True)
     running.add_argument("--output", type=Path, required=True)
-    running.add_argument("--provider", choices=("scripted", "deepseek"), default="scripted")
+    running.add_argument("--provider", choices=PROVIDER_CHOICES, default="scripted")
     running.add_argument("--credentials", type=Path)
     running.add_argument("--preflight", type=Path)
     probing = commands.add_parser("preflight")
@@ -1728,13 +1803,14 @@ def main() -> int:  # noqa: PLR0915 - explicit study subcommands
         "execution",
         "preflight",
         "credentials",
+        "protocol",
     ):
         value = getattr(args, key, None)
         if value is not None:
             setattr(args, key, value.absolute())
     try:
         if args.command == "plan":
-            result = plan(args.output)
+            result = plan(args.output, args.protocol)
         elif args.command == "check":
             result = check(args.snapshot)
         elif args.command == "prepare":

@@ -6,6 +6,7 @@ import ast
 import difflib
 import fnmatch
 import json
+import re
 from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,6 +21,10 @@ from myagentrun.infrastructure import (
 from myagentrun.tools.runtime import ToolError, schema_for
 
 _MAX_INDEXED_FILE_BYTES = 256_000
+_MAX_SEARCH_FILE_BYTES = 512_000
+_SKIPPED_DIRECTORIES = frozenset(
+    {".git", ".myagentrun", ".minidsh", ".venv", "node_modules", "dist", "build"}
+)
 
 
 class StrictInput(BaseModel):
@@ -296,6 +301,99 @@ class ListFilesTool:
                 break
             files.append(relative.as_posix())
         return {"files": cast("list[JsonValue]", sorted(files)), "truncated": truncated}
+
+
+class GrepInput(StrictInput):
+    """A bounded regular-expression search that returns context, not just counts."""
+
+    pattern: str = Field(min_length=1, max_length=512)
+    path: str = "."
+    glob: str = "*"
+    context_lines: int = Field(default=2, ge=0, le=10)
+    max_matches: int = Field(default=50, ge=1, le=200)
+    case_sensitive: bool = True
+
+
+class GrepTool:
+    """Find a regular expression in workspace files and show the matching lines.
+
+    ``search`` matches a literal substring and ``search_code`` only counts hits, so
+    an agent that needs the surrounding code had to read the file again.  This tool
+    returns the matched line plus a small, bounded context window, which is what the
+    model actually needs to decide what to read next.
+    """
+
+    input_model = GrepInput
+
+    def __init__(self, sandbox: WorkspaceSandbox) -> None:
+        self._sandbox = sandbox
+        self.definition = ToolDefinition(
+            "grep",
+            "Search workspace files with a regular expression and return matching "
+            "lines with bounded context.",
+            schema_for(self.input_model),
+            permissions=("fs.read",),
+            timeout_seconds=30.0,
+        )
+
+    async def execute(self, arguments: BaseModel) -> JsonValue:
+        args = cast("GrepInput", arguments)
+        try:
+            expression = re.compile(args.pattern, 0 if args.case_sensitive else re.IGNORECASE)
+        except re.error:
+            # The pattern itself may echo user text, so only the code is reported.
+            raise ToolError(
+                "invalid_pattern", "the pattern is not a valid regular expression"
+            ) from None
+        try:
+            root = self._sandbox.resolve(args.path, must_exist=True)
+        except SandboxViolationError as exc:
+            raise ToolError("sandbox_violation", str(exc)) from exc
+        candidates = (root,) if root.is_file() else root.rglob("*")
+        matches: list[JsonValue] = []
+        files: list[str] = []
+        truncated = False
+        for path in candidates:
+            if len(matches) >= args.max_matches:
+                truncated = True
+                break
+            if not path.is_file() or not fnmatch.fnmatch(path.name, args.glob):
+                continue
+            relative = path.relative_to(self._sandbox.root)
+            if any(part in _SKIPPED_DIRECTORIES for part in relative.parts):
+                continue
+            try:
+                self._sandbox.ensure_not_sensitive(path)
+                if path.stat().st_size > _MAX_SEARCH_FILE_BYTES:
+                    continue
+                text = self._sandbox.read_text(relative.as_posix())
+            except (OSError, UnicodeError, SandboxViolationError):
+                continue
+            lines = text.splitlines()
+            for number, line in enumerate(lines, 1):
+                if expression.search(line) is None:
+                    continue
+                if len(matches) >= args.max_matches:
+                    truncated = True
+                    break
+                first = max(1, number - args.context_lines)
+                last = min(len(lines), number + args.context_lines)
+                if relative.as_posix() not in files:
+                    files.append(relative.as_posix())
+                matches.append(
+                    {
+                        "path": relative.as_posix(),
+                        "line": number,
+                        "text": line[:500],
+                        "before": [item[:300] for item in lines[first - 1 : number - 1]],
+                        "after": [item[:300] for item in lines[number:last]],
+                    }
+                )
+        return {
+            "matches": matches,
+            "files": cast("list[JsonValue]", files),
+            "truncated": truncated,
+        }
 
 
 class SearchCodeInput(StrictInput):

@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import unicodedata
 from dataclasses import asdict, dataclass
 from typing import Literal
 
@@ -18,48 +17,24 @@ from myagentrun.domain.memory import (
     MemoryValidationError,
     select_memory,
 )
+from myagentrun.domain.memory_ranking import (
+    DEFAULT_SELECTOR,
+    FieldedText,
+    RankedDocument,
+    SelectorName,
+    rank,
+)
+from myagentrun.domain.memory_ranking import (
+    lexical_terms as lexical_terms,  # noqa: PLC0414 - frozen public re-export
+)
 from myagentrun.domain.models import JsonValue
 from myagentrun.domain.redaction import redact_text
 
-SELECTOR_VERSION = "memory_lexical_v1"
+SELECTOR_VERSION = DEFAULT_SELECTOR
 MAX_QUERY_CHARS = 256
 MAX_QUERY_BYTES = 1024
 _ID = re.compile(r"[a-z][a-z0-9_]{0,127}")
 _HASH = re.compile(r"[a-f0-9]{64}")
-
-
-def _han(character: str) -> bool:
-    return "\u3400" <= character <= "\u9fff" or "\U00020000" <= character <= "\U000323af"
-
-
-def lexical_terms(text: str) -> frozenset[str]:
-    """NFKC/casefold, ASCII words, Han bigrams and other alphabetic runs."""
-    terms: set[str] = set()
-    run: list[str] = []
-    previous = ""
-
-    def flush() -> None:
-        word = "".join(run)
-        if previous == "han" and len(word) > 1:
-            terms.update(word[i : i + 2] for i in range(len(word) - 1))
-        elif word:
-            terms.add(word)
-        run.clear()
-
-    for character in unicodedata.normalize("NFKC", text).casefold():
-        if _han(character):
-            category = "han"
-        elif (character.isascii() and character.isalnum()) or character.isalpha():
-            category = "word"
-        else:
-            category = ""
-        if category != previous or not category:
-            flush()
-        if category:
-            run.append(character)
-        previous = category
-    flush()
-    return frozenset(terms)
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +92,13 @@ class MemorySearchResult:
     snapshot_sha256: str
     query_sha256: str
     selector_version: str = SELECTOR_VERSION
+    term_overlap: bool = True
+    """False when no eligible record shares a single term with a non-empty query.
+
+    This is the documented limit of lexical retrieval: a paraphrase with no common
+    token is a miss by construction, and callers must be able to tell that apart
+    from "the corpus is empty" or "everything was filtered out".
+    """
 
     @property
     def truncated(self) -> bool:
@@ -148,19 +130,12 @@ def _query_terms(query: str | None) -> frozenset[str]:
     return lexical_terms(query)
 
 
-def _card(entry: MemoryEntry, terms: frozenset[str]) -> MemoryCard:
-    score = 0
-    matched: list[str] = []
-    for field, text, weight in (
-        ("topic", entry.topic, 8),
-        ("paths", " ".join(entry.paths), 4),
-        ("error_type", entry.error_type or "", 4),
-        ("content", entry.content, 1),
-    ):
-        count = len(terms & lexical_terms(text))
-        if count:
-            matched.append(field)
-            score += count * weight
+def fielded(entry: MemoryEntry) -> FieldedText:
+    """Render one record's four searchable fields; the single place that decides them."""
+    return FieldedText(entry.topic, " ".join(entry.paths), entry.error_type or "", entry.content)
+
+
+def _card(entry: MemoryEntry, ranked: RankedDocument) -> MemoryCard:
     return MemoryCard(
         entry.entry_id,
         entry.topic,
@@ -172,8 +147,8 @@ def _card(entry: MemoryEntry, terms: frozenset[str]) -> MemoryCard:
         entry.evidence_sha256,
         entry.approval_sha256,
         "conditional" if entry.paths or entry.error_type is not None else "unconditional",
-        score,
-        tuple(matched),
+        ranked.score,
+        ranked.matched_fields,
     )
 
 
@@ -186,6 +161,7 @@ def discover_memory(  # noqa: PLR0913 - explicit, bounded query contract
     paths: tuple[str, ...] = (),
     error_type: str | None = None,
     limit: int = MAX_RETRIEVED_ENTRIES,
+    selector: SelectorName = SELECTOR_VERSION,
 ) -> MemorySearchResult:
     """Discover topics even before their path/error applicability is established."""
     select_memory((), project_id=project_id, applicable_version=applicable_version, paths=paths)
@@ -203,7 +179,7 @@ def discover_memory(  # noqa: PLR0913 - explicit, bounded query contract
     for entry in candidates:
         contents.setdefault(entry.topic, set()).add(entry.content_sha256)
     omissions: list[MemoryOmission] = []
-    cards: list[MemoryCard] = []
+    eligible: list[MemoryEntry] = []
     seen: set[str] = set()
     for entry in candidates:
         if len(contents[entry.topic]) > 1:
@@ -225,14 +201,29 @@ def discover_memory(  # noqa: PLR0913 - explicit, bounded query contract
             continue
         if error_type is not None and entry.error_type not in (None, error_type):
             continue
-        card = _card(entry, terms)
-        if query is None or card.score > 0:
-            cards.append(card)
+        eligible.append(entry)
+    # Score the whole eligible set at once: IDF is a corpus statistic, so ranking
+    # one record in isolation would silently change every score.
+    fielded_entries = tuple(fielded(entry) for entry in eligible)
+    scored = rank(fielded_entries, terms, selector)
+    cards = [
+        _card(entry, ranked)
+        for entry, ranked in zip(eligible, scored, strict=True)
+        if query is None or ranked.score > 0
+    ]
     cards.sort(key=lambda item: (-item.score, item.entry_id))
     omissions.extend(MemoryOmission(card.entry_id, "selection_limit") for card in cards[limit:])
+    # The caller's path/error filter narrows what may be returned, not what the
+    # project knows.  Measuring overlap on the filtered set reported a lexical miss
+    # that does not exist, which misdirects the diagnosis toward semantic recall.
+    overlap = not terms or any(
+        not terms.isdisjoint(fielded(entry).tokens()) for entry in candidates
+    )
     return MemorySearchResult(
         tuple(cards[:limit]),
         tuple(sorted(omissions, key=lambda item: (item.entry_id, item.reason))),
         snapshot_sha256(scoped),
         hashlib.sha256((query or "").encode()).hexdigest(),
+        selector,
+        overlap,
     )

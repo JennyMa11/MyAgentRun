@@ -32,7 +32,13 @@ from myagentrun.domain.memory import (
 )
 from myagentrun.domain.memory_consolidation import ConsolidationFact, ConsolidationInput
 from myagentrun.domain.memory_notes import MemoryNoteSource, parse_memory_note
-from myagentrun.memory_consolidation import ConsolidateMemoryTool, ReviewConsolidationTool
+from myagentrun.memory_consolidation import (
+    MAX_CONSOLIDATION_SECONDS,
+    ConsolidateMemoryTool,
+    ReviewConsolidationTool,
+    _Arguments,
+)
+from myagentrun.ports import Model
 from myagentrun.runtime import EventBus
 from myagentrun.runtime.memory import MemoryService
 from myagentrun.tools import PermissionPolicy, ToolRegistry, ToolRuntime
@@ -1020,5 +1026,41 @@ async def test_p505_trusted_operator_task_is_visible_and_hash_bound(tmp_path: Pa
         assert result.result["input_sha256"] == inputs.input_sha256
         assert inputs.input_sha256 != replace(inputs, task_instruction=None).input_sha256
         assert await store.snapshot("alpha") == tuple(entries)
+    finally:
+        await store.close()
+
+
+def test_consolidation_clock_defaults_to_thirty_seconds() -> None:
+    """Raising the ceiling must not raise the default.
+
+    A slower pinned route may need a longer wall clock, but every existing caller
+    must keep the 30-second default it was accepted with, and the ceiling must stay
+    bounded so a protocol cannot ask for an unbounded run.
+    """
+    field = _Arguments.model_fields["max_duration_seconds"]
+    assert field.default == 30.0
+    assert [m.le for m in field.metadata if hasattr(m, "le")] == [MAX_CONSOLIDATION_SECONDS]
+    assert 30.0 < MAX_CONSOLIDATION_SECONDS <= 600.0
+
+
+@pytest.mark.asyncio
+async def test_the_outer_tool_deadline_covers_every_legal_inner_budget(tmp_path: Path) -> None:
+    """The wrapper must never time out before the run it wraps can finish.
+
+    ``max_duration_seconds`` may be raised to the documented ceiling for a slow
+    route, but the tool definition used to be pinned at 35 s.  A legal 240 s
+    consolidation was therefore cancelled by its own caller, returning
+    ``tool_timeout`` instead of the receipt that carries the run id and usage.
+    """
+    service, store, _entries = await _setup(tmp_path)
+
+    def no_model() -> Model:
+        raise AssertionError("the deadline is fixed before any model is built")
+
+    tool = ConsolidateMemoryTool(
+        service, model_factory=no_model, events=EventBus(), operator_id="operator"
+    )
+    try:
+        assert tool.definition.timeout_seconds > MAX_CONSOLIDATION_SECONDS
     finally:
         await store.close()

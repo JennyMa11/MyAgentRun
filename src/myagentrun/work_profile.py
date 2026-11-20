@@ -20,6 +20,7 @@ TOOLS = (
     "write_file",
     "patch_file",
     "search",
+    "grep",
     "list_files",
     "search_code",
     "find_symbol",

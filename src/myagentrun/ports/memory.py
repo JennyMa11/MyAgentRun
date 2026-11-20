@@ -58,6 +58,16 @@ class MemoryView(Protocol):
         error_type: str | None = None,
     ) -> MemorySelection | None: ...
 
+    async def refresh(
+        self,
+        run_id: str,
+        *,
+        paths: tuple[str, ...] = (),
+        error_type: str | None = None,
+    ) -> MemorySelection | None:
+        """Recheck the frozen candidates against current authority before exposure."""
+        ...
+
 
 class ProgressiveMemoryView(Protocol):
     def observe_history(self, history: tuple[Message, ...]) -> None: ...

@@ -27,6 +27,7 @@ def test_full_work_profile_enables_tools_and_extensions(tmp_path: Path) -> None:
         "write_file",
         "patch_file",
         "search",
+        "grep",
         "list_files",
         "search_code",
         "find_symbol",
