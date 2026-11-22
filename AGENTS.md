@@ -2,10 +2,9 @@
 
 本文件是仓库级开发约束。所有实现、测试、文档与自动化均须遵守；若设计需要突破约束，应先在 ADR 中记录原因、替代方案和迁移路径。
 
-后续 Extension / Skills / Context Assembly / Verification / Memory 升级以
-[扩展升级执行与验收主计划 v1](docs/extension-roadmap.md) 为范围和阶段验收依据。
-一次只执行当前阶段；新增能力须按该计划记录范围变更，不从历史建议或参考产品自动扩充需求。
-主计划不替代本文件的安全、质量与评测约束。
+后续 Extension / Skills / Context Assembly / Verification / Memory 升级按主计划分阶段推进，
+并以本文件的安全、质量与评测约束为准。一次只执行当前阶段；新增能力须记录范围变更，
+不从历史建议或参考产品自动扩充需求。
 
 ## 1. 项目边界
 
@@ -145,7 +144,7 @@ cli -> application(agent loop) -> domain(contracts/events)
 - 安全检查观察真实文件、进程、网络和输出等副作用；模拟 adapter 的测试不等同于操作系统隔离验证。不得为消融在宿主机关闭路径或权限安全边界。
 - 本机评测优先轻量、原生架构、单 Agent 顺序执行；单任务容器默认 1 CPU、最多 1 GB，整轮采用预先声明的合理 Token 预算。确定性契约/故障测试优先离线运行，真实 DeepSeek 用于可用性及必要的配对消融。
 - 从已有 Trace 补算指标时另存派生报告，记录原始输入与评分器版本/hash，保持原始 Trace、冻结判据和源码快照。补算不能描述为重新实测新版本，也不能据此补认未触发功能。
-- 完整指标定义、sidecar 和入口见 [Harness 评测指标](docs/harness-evaluation.md)；当前轻量公开任务协议见 [轻量公开修复评测](docs/lightweight-public-benchmark.md)。
+- 完整指标定义、sidecar 格式和入口以本节与 `docs/harness-evaluation.md` 为准（该文档属于作者本地笔记，不随仓库发布）；当前轻量公开任务协议见 `docs/lightweight-public-benchmark.md`。
 
 ## 10. 代码与质量门禁
 
@@ -154,7 +153,7 @@ cli -> application(agent loop) -> domain(contracts/events)
 - 测试不得依赖真实模型服务、用户主目录、全局 Git 配置、当前时间或不固定的网络内容。
 - 每次提交前必须通过：`uv run ruff format --check .`、`uv run ruff check .`、`uv run mypy src tests`、`uv run pytest`。
 - 不提交 `.env`、密钥、虚拟环境、模型响应缓存、Benchmark 工作副本或包含敏感信息的 Trace。
-- 新增公共能力需更新 README 或 `docs/`；重要架构决策写入 `docs/adr/`。
+- 新增公共能力需更新 README；重要架构决策在提交说明或本地 ADR 笔记中记录理由、替代方案和迁移路径。
 - 提交保持单一目的，禁止顺手改动无关文件；生成文件必须注明来源且可再生成。
 
 ## 11. 配置与命名

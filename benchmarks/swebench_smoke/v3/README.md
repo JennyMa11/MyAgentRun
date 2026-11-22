@@ -2,7 +2,7 @@
 
 输入仍为 v1/v2 的三个调试任务，任务预算仍是 1,000,000 Token、200 步、400 调用、
 3,600 秒。新增显式输入上下文上限 65,536，单响应输出上限 16,384，SSE 传输，300 秒超时。
-这些变更来自实际发现的默认 8K 限制和连接断开，见 [ADR 0033](../../../docs/adr/0033-swebench-context-and-native-environments.md)。
+这些变更来自实际发现的默认 8K 限制和连接断开，见 ADR 0033（swebench-context-and-native-environments，作者本地记录）。
 
 前轮 `benchmark-results/swebench-smoke/v2/moerouter-high-budget/` 的原始 Trace
 保留 1 次未知用量事件。路由商逐调用日志补算已确认该次消耗 10,744 Token，

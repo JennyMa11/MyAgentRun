@@ -63,7 +63,7 @@ uv run python /absolute/artifacts/reproduction/benchmarks/swebench_context/v1/ru
 先检查策略是否实际触发：压缩/丢弃条数、检索读取与retrieved_chunks均由Trace核查；未触发的机制不认定有效。
 只有一次执行；Full History是历史运行，且存在服务状态与输入估算的已知限制。
 结果支持这些固定任务和配置的描述性比较；没有重复和不确定性分析前，不宣称通用机制收益。
-具体决策见 [ADR0037](../../../docs/adr/0037-context-lite20-sweep.md)。
+具体决策记录在作者本地的 ADR0037（context-lite20-sweep）中，不随仓库发布。
 
 ## 执行中发现的评分入口错误
 

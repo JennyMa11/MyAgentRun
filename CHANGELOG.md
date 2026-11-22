@@ -6,7 +6,7 @@
 
 - 项目更名为 MyAgentRun，Python 包和 CLI 统一为 `myagentrun`，开发入口为
   `myagentrun-work`；配置、环境变量、插件入口组与运行目录同步更名。
-  迁移边界见 [ADR 0031](docs/adr/0031-myagentrun-rename.md)；历史评测证据保留原名。
+  迁移边界见 ADR 0031；历史评测证据保留原名。
 
 - 新增 hard 套件的两策略 Context 对照入口，交替任务内的策略顺序，保留重复采样、
   失败样本和完整 Trace；不改动核心 Loop 或既有 BenchmarkRunner。
@@ -37,10 +37,10 @@
 
 **`hard` 套件实测结果**
 
-- 4 任务 × 5 次重复 = 20 次运行，`deepseek-flash`，thinking 关闭，off-peak 费率 $0.15 / $0.6 / $0.003：**成功率 95%（19/20）**，归档在 [`docs/results/hard.md`](docs/results/hard.md)。这是本仓库第一次给出低于 100% 的成功率——不是因为模型变弱了，是因为判据第一次不再由 Agent 自己维护。
+- 4 任务 × 5 次重复 = 20 次运行，`deepseek-flash`，thinking 关闭，off-peak 费率 $0.15 / $0.6 / $0.003：**成功率 95%（19/20）**，归档在 `docs/results/hard.md`。这是本仓库第一次给出低于 100% 的成功率——不是因为模型变弱了，是因为判据第一次不再由 Agent 自己维护。
 - 唯一的失败是 `hard-interval-merge` 第 2 次重复：17 步（上限 24）、21 次工具调用（上限 48）**全部成功**，累计 151,854 Token 撞上 15 万 Token 上限。**绑定约束是 Token 而不是步数**——它只走到 17/24 步，步数预算从未接近。
 - `summary.json` 的 `real_model` 条目新增 `tasks` 逐任务汇总（`archive-results.py` 的 `_task_rollup`）：聚合值区分不了"一个任务每次都失败"和"五个任务各失败一次"，而这是两个不同的结论。**没成功过的任务其 `cost_per_success_usd` 记 `null` 而不是 0**，否则最难的会显示成最便宜的。
-- README 新增"留出判据套件（`hard`）"一节，表格放在 `<!-- hard-suite-results:start -->` 标记内；[`docs/real-model-evaluation.md`](docs/real-model-evaluation.md) 新增第 11 节；[`docs/benchmark.md`](docs/benchmark.md) 补上 `verification_overlay` 的协议、执行顺序与新增任务的流程。
+- README 新增"留出判据套件（`hard`）"一节，表格放在 `<!-- hard-suite-results:start -->` 标记内；`docs/real-model-evaluation.md` 新增第 11 节；`docs/benchmark.md` 补上 `verification_overlay` 的协议、执行顺序与新增任务的流程。
 
 ### Fixed
 
@@ -70,10 +70,10 @@
 
 **真实模型消融结果**
 
-- **Context 策略消融**（6 变体 × 3 任务 × 3 次重复 = 54 次运行，全部通过）：归档在 [`docs/results/stress-real-context-ablation.md`](docs/results/stress-real-context-ablation.md)。`repo_retrieval` 是成本赢家（每次成功 **$0.001243**，唯一在成本轴上不被支配的变体），步数也接近最少（6.56）。
+- **Context 策略消融**（6 变体 × 3 任务 × 3 次重复 = 54 次运行，全部通过）：归档在 `docs/results/stress-real-context-ablation.md`。`repo_retrieval` 是成本赢家（每次成功 **$0.001243**，唯一在成本轴上不被支配的变体），步数也接近最少（6.56）。
 - **核心读数：Token 更少 ≠ 更便宜，在缓存计价下会反号。** `sliding_window`（26,096 Token）与 `summary_compaction`（26,073）都比 `full_history`（29,315）省约 11% Token，**却都更贵**（$0.001398 / $0.001480 vs $0.001284）。机制是 prompt cache：命中价 $0.003 与未命中价 $0.15 相差 **50 倍**，而截断策略每一步都在改动前缀、把可复用前缀打断；`full_history` 只追加不修改，因此拿到最高的 92% 命中率。**这是"用 Token 数当成本代理"会系统性出错的地方**，也是只有真实 provider 才能测到的东西。
-- **工具输出消融**（3 变体 × 3 任务 × 3 次重复 = 27 次运行，全部通过）：归档在 [`docs/results/stress-real-tool_output-ablation.md`](docs/results/stress-real-tool_output-ablation.md)。`bounded_output_artifact` 在 Token / 成本 / 步数三轴都不被支配——相比不设上限省 6.6% Token、5.9% 成本而成功率不变；**单把上限从 200K 压到 20K 只省 2.1%，真正的杠杆是溢出落盘而不是上限**。
-- `summary.json` 新增 `real_model_ablations` 块；README 新增"真实模型消融"一节，两组表格都放在 `<!-- real-model-ablation-results:start -->` 标记内；[`docs/real-model-evaluation.md`](docs/real-model-evaluation.md) 新增第 10 节，分列两组结果、这次修复的发现路径，以及"这两组实验不成立什么"；[`docs/context-engineering.md`](docs/context-engineering.md) §4 补上真实模型读数与缓存反号结论。
+- **工具输出消融**（3 变体 × 3 任务 × 3 次重复 = 27 次运行，全部通过）：归档在 `docs/results/stress-real-tool_output-ablation.md`。`bounded_output_artifact` 在 Token / 成本 / 步数三轴都不被支配——相比不设上限省 6.6% Token、5.9% 成本而成功率不变；**单把上限从 200K 压到 20K 只省 2.1%，真正的杠杆是溢出落盘而不是上限**。
+- `summary.json` 新增 `real_model_ablations` 块；README 新增"真实模型消融"一节，两组表格都放在 `<!-- real-model-ablation-results:start -->` 标记内；`docs/real-model-evaluation.md` 新增第 10 节，分列两组结果、这次修复的发现路径，以及"这两组实验不成立什么"；`docs/context-engineering.md` §4 补上真实模型读数与缓存反号结论。
 
 ### Fixed
 
@@ -104,11 +104,11 @@
 
 **真实模型实测结果**
 
-- 首次在真实 provider 上跑通 `repo` 套件：6 个跨文件任务 × 3 次逐任务交错重复 = **18 次运行全部通过**，`pass@k` 100%，成功率极差 0.00，失败层分解 `success 18 / harness 0 / agent 0 / environment 0`。报告归档在 [`docs/results/repo-real.md`](docs/results/repo-real.md)，机器可读汇总进入 `docs/results/summary.json` 的 `real_model` 块。
+- 首次在真实 provider 上跑通 `repo` 套件：6 个跨文件任务 × 3 次逐任务交错重复 = **18 次运行全部通过**，`pass@k` 100%，成功率极差 0.00，失败层分解 `success 18 / harness 0 / agent 0 / environment 0`。报告归档在 `docs/results/repo-real.md`，机器可读汇总进入 `docs/results/summary.json` 的 `real_model` 块。
 - 实测读数（`deepseek-flash`，thinking 关闭，`temperature=0`，off-peak 费率 $0.15 / $0.6 / $0.003 per 1M tokens）：平均 6.61 步、19,132 Token、10.28 次工具调用；**缓存输入占比 86%**；平均延迟 6,410.1 ms = model 6,290.6 + tool 103.1 + **harness 16.4（占墙钟 0.26%）**；总成本 **$0.016865**，**每次成功成本 $0.000937**。
 - **报告现在记录自己的实验条件。** `BenchmarkReport` 新增 `model` 块，写入 profile / endpoint / 上下文窗口 / thinking 开关 / `temperature_effective` / 显式费率，Markdown 报告新增 "Model and rate card" 章节。此前这些事实只存在于产生报告的那条 shell 命令里，一份成本报告脱离命令行历史就无法审计。
 - `scripts/archive-results.py` 归档真实模型报告并在 `summary.json` 中生成 `real_model` 块。费率必须由环境变量显式声明：缺失时保留上一份而不是写入未知费率，因为 off-peak 是 peak 的一半，同一份报告有两组都正确的成本数字。
-- 文档：README 新增"真实模型基线"一节，含"这个 100% 只说明这么多"的四条限制；[`docs/real-model-evaluation.md`](docs/real-model-evaluation.md) 新增第 9 节，分别记录这次实测**成立**与**不成立**的结论；`docs/resume.md`、`docs/technical-highlights.md` 同步。
+- 文档：README 新增"真实模型基线"一节，含"这个 100% 只说明这么多"的四条限制；`docs/real-model-evaluation.md` 新增第 9 节，分别记录这次实测**成立**与**不成立**的结论；`docs/resume.md`、`docs/technical-highlights.md` 同步。
 
 ### Changed
 
@@ -167,8 +167,8 @@
 
 **文档**
 
-- 新增 [`docs/real-model-evaluation.md`](docs/real-model-evaluation.md)：profile 表、成本模型、延迟模型、重复采样协议、套件选型、结果读法，以及 `3.38×` / `+40%` / `−27%` 三个数字的 workload / baseline / variant / metric / run count / 是否真实模型六项来源说明。
-- 新增 [`docs/failure-taxonomy.md`](docs/failure-taxonomy.md)：类别表、层归属、决策顺序、诊断证据格式、Trace 回放与差分工作流、失败案例分析流程。
+- 新增 `docs/real-model-evaluation.md`：profile 表、成本模型、延迟模型、重复采样协议、套件选型、结果读法，以及 `3.38×` / `+40%` / `−27%` 三个数字的 workload / baseline / variant / metric / run count / 是否真实模型六项来源说明。
+- 新增 `docs/failure-taxonomy.md`：类别表、层归属、决策顺序、诊断证据格式、Trace 回放与差分工作流、失败案例分析流程。
 
 ### Changed
 

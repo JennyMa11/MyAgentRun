@@ -1,7 +1,7 @@
 # 固定 SWE-bench Lite 20 题：完整链路验证 v1
 
 本轮已完成 20/20 唯一尝试及独立评分，修复成功 11/20（55%）。
-完整报告见 [评测结果](../../../docs/swe-bench-lite20-results.md)。
+完整报告保存在作者本地笔记中，不随仓库发布；本节保留结论与口径。
 已知消耗 8,105,553 Token，另有 1 次故障调用用量未知；协议续跑偏离与未测项均在报告中保留。
 
 2026-11-16 用户将当前目标改为“先选 SWE-bench Lite 中固定的 20 个任务，跑通完整评测链路”。
@@ -110,10 +110,10 @@ uv run python -m myagentrun.benchmark.swebench_smoke run \
 
 路由商用量补算只接受类型 2 的消耗记录，要求正输入 Token、非负输出 Token。
 错误日志中的零字段不代表实际零消耗，保持未知并停止后续调用。
-本轮中途状态与当前证据缺口见 [进度记录](../../../docs/swe-bench-lite20-progress.md)。
+本轮中途状态与证据缺口记录在作者本地的进度笔记中，不随仓库发布。
 
 2026-11-17 用户确认服务端故障并指示继续运行。按
-[ADR 0035](../../../docs/adr/0035-lite20-provider-failure-continuation.md)，仅豁免原第 14 题
+ADR 0035（lite20-provider-failure-continuation，作者本地记录），仅豁免原第 14 题
 第 30 步的未知用量停止条件，在 `continuation-01/` 继续未尝试的六题。
 原清单、前 14 题尝试和评分保持不变；旧未知用量不计为零，完整 Token 消耗及预算约束保持未知。
 后续新故障仍执行停止规则。最终汇总使用 `report.py --additional-root` 合并唯一尝试，

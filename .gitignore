@@ -33,5 +33,10 @@ benchmark-results/
 # Local agent workspace state
 .workbuddy-ai/
 
+# Author-only long-form notes (roadmap, ADRs, evaluation reports).
+# They are written for local use and are deliberately not published; the
+# published surface is README.md, AGENTS.md, CHANGELOG.md and the source tree.
+/docs/
+
 # MyAgentRun private credentials
 /.myagentrun/credentials.toml

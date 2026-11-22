@@ -1,7 +1,7 @@
 # Pi 1.5.0 与 MyAgentRun 的 Lite20 历史对照
 
 用户明确选择只运行 Pi 20 题，对照已完成的 MyAgentRun 11/20，不重跑历史基线。
-范围与隔离决定见 [ADR 0036](../../../docs/adr/0036-pi-historical-comparison.md)。
+范围与隔离决定见 ADR 0036（pi-historical-comparison，作者本地记录）。
 
 固定输入沿用 `benchmarks/swebench_lite/v1/selection.json` 的全部20题，不按结果换题。
 逐任务初始提交、原生 ARM64 镜像、1 CPU / 1 GB / 128 PID、断网与无挂载、
@@ -21,7 +21,7 @@ Token 以原始 provider usage 输入+输出核算，缓存输入是输入子集
 在途超量保留。未知用量单独计数，完整实际消耗返回 null，并停止后续题目。
 
 运行中修订：第11题出现无法核对用量的连接错误后，按
-[ADR0036续跑修订](../../../docs/adr/0036-pi-historical-comparison.md)允许跨批次继续未尝试题目。
+ADR0036 的续跑修订（作者本地记录）允许跨批次继续未尝试题目。
 每个含未知用量的历史任务另预留100万Token用于额度调度，实际消费和整轮预算满足保持未知。
 原始冻结协议与Trace保留，最终报告必须披露此项偏离；不重跑失败题。
 工具原始输出最多4MiB，单次桥接请求最多80000字节，超限返回明确错误；

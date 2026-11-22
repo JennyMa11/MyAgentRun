@@ -18,6 +18,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 README = REPO_ROOT / "README.md"
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
+DOCS = REPO_ROOT / "docs"
+
+# The long-form documentation is kept with the project rather than published
+# here: it is written for the author's own working notes, changes on almost every
+# commit, and nothing in `src/` reads it.  The repository still ships the README,
+# so the gates that only need the README always run; the ones below that read a
+# document out of `docs/` are skipped where that tree is absent instead of
+# failing on a file this checkout is not expected to have.
+_WHEN_DOCS_PRESENT = pytest.mark.skipif(
+    not DOCS.is_dir(), reason="the long-form documentation is not part of this repository"
+)
 
 # Benchmark manifests checked by this module.
 COUNTED_SUITES = ("core", "repo", "hard")
@@ -106,19 +117,16 @@ _COVERAGE_CLAIM = re.compile(r"覆盖率[\s*]*(\d+)\s*%")
 # Rewriting measured history to match today's tree would destroy the audit trail.
 _COUNT_GATED_DOCS = (
     README,
-    *(
-        path
-        for path in (REPO_ROOT / "docs").rglob("*.md")
-        if not path.is_relative_to(REPO_ROOT / "docs/results")
-    ),
+    *(path for path in DOCS.rglob("*.md") if not path.is_relative_to(DOCS / "results")),
 )
 
 
+@_WHEN_DOCS_PRESENT
 def test_historical_results_are_not_gated_against_current_tree() -> None:
-    historical = REPO_ROOT / "docs/results/offline-regression-2026-09-27.md"
+    historical = DOCS / "results/offline-regression-2026-09-27.md"
     assert historical.is_file()
     assert historical not in _COUNT_GATED_DOCS
-    assert REPO_ROOT / "docs/resume.md" in _COUNT_GATED_DOCS
+    assert DOCS / "resume.md" in _COUNT_GATED_DOCS
 
 
 def test_every_document_quotes_the_same_test_count(
@@ -168,6 +176,7 @@ def test_mypy_file_count_matches_the_type_checked_tree() -> None:
     )
 
 
+@_WHEN_DOCS_PRESENT
 def test_coverage_is_quoted_consistently_across_documents() -> None:
     """Consistency, not truth.
 
@@ -197,7 +206,7 @@ _VARIANT_NAME = re.compile(r"`([^`]+)`")
 # specification: it is how a reader decides what a strategy keeps.  It is also the
 # place where "injects code" and "keeps history" get conflated, so it is checked
 # against the factory rather than trusted.
-_CONTEXT_DOC = REPO_ROOT / "docs" / "context-engineering.md"
+_CONTEXT_DOC = DOCS / "context-engineering.md"
 
 
 def _documented_context_classes() -> dict[str, str]:
@@ -228,6 +237,7 @@ def _documented_context_classes() -> dict[str, str]:
     return rows
 
 
+@_WHEN_DOCS_PRESENT
 def test_the_context_strategy_table_names_the_base_class_the_factory_builds(
     tmp_path: Path,
 ) -> None:

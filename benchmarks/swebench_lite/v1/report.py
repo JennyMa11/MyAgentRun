@@ -598,6 +598,7 @@ def main() -> None:
     selection = SmokeSelection.model_validate_json(args.selection.read_text())
     report = audit(selection, [args.root, *args.additional_root], args.credentials_file)
     write_json(args.root / "study-report.json", report)
+    args.markdown.parent.mkdir(parents=True, exist_ok=True)
     args.markdown.write_text(markdown(report))
     print(
         json.dumps(

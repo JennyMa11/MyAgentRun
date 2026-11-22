@@ -440,7 +440,9 @@ def main() -> None:
     args = parser.parse_args()
     result = audit(args.root)
     write_json(args.root / "comparison-report.json", result)
-    Path("docs/pi-vs-myagentrun-lite20.md").write_text(markdown(result))
+    destination = Path("docs/pi-vs-myagentrun-lite20.md")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(markdown(result))
     print(
         {
             k: result[k]

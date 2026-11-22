@@ -239,6 +239,10 @@ def test_report_keeps_all_unrun_rows_unknown_and_uses_a_new_directory(tmp_path: 
     assert cli("report", "--snapshot", str(snapshot), "--output", str(output)).returncode != 0
 
 
+@pytest.mark.skipif(
+    not (ROOT / "docs/results").is_dir(),
+    reason="the long-form documentation is not part of this repository",
+)
 @pytest.mark.parametrize("stage", ["pr4", "m5"])
 def test_published_derived_report_does_not_change_the_frozen_source_identity(
     tmp_path: Path, stage: str

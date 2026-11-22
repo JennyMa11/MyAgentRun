@@ -169,8 +169,9 @@ def main() -> None:
     source, output = args.source.resolve(), args.output.resolve()
     if not source.is_relative_to(PROJECT / "benchmark-results"):
         parser.error("source must be inside benchmark-results")
-    if not output.is_relative_to(PROJECT / "docs/results"):
-        parser.error("output must be inside docs/results")
+    if not output.is_relative_to(PROJECT):
+        parser.error("output must be inside the project")
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(render(source, output), encoding="utf-8")
 
 

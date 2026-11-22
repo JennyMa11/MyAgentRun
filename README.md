@@ -21,14 +21,14 @@ uv run python examples/minimal_demo.py
 uv run myagentrun work --workspace /path/to/repo --test-command "python -m pytest"
 ```
 
-`work` 默认使用 DeepSeek，可用 `--model-profile` 切换模型。密钥可以通过 `DEEPSEEK_API_KEY` 提供，也可以在首次提交任务时按提示输入。进入会话后用 `/help` 查看命令，`/diff` 查看修改，`/test` 运行配置好的测试。[模型与凭据配置](docs/model-configuration.md)
+`work` 默认使用 DeepSeek，可用 `--model-profile` 切换模型。密钥可以通过 `DEEPSEEK_API_KEY` 提供，也可以在首次提交任务时按提示输入。模型和凭据的完整清单在 `myagentrun.toml` 与 `MYAGENTRUN_*` 环境变量里，`.env.example` 列出了常用项。进入会话后用 `/help` 查看命令，`/diff` 查看修改，`/test` 运行配置好的测试。
 
 ## 当前能力
 
-- **执行与权限** · 循环跟踪步骤、Token、工具调用和墙钟预算。工具在执行前校验参数和权限，支持逐次审批和 Docker 隔离。[Runtime 说明](docs/mini-dsh-runtime.md) · [隔离与权限](docs/sandbox-security.md)
-- **会话与上下文** · 支持恢复、取消和分叉，可配置历史窗口、摘要和仓库检索。原始会话记录用于恢复，选定的上下文策略决定模型每步看到的内容。[Context 策略](docs/context-engineering.md)
-- **扩展与验证** · 模型、工具和运行服务通过显式接口组装。可配置 Skills、完成前验证和可选的 Project Memory。[扩展接口](docs/extensibility.md) · [Verification](docs/extension-verification.md) · [Project Memory](docs/extension-memory.md)
-- **Trace 与诊断** · 记录模型、工具、权限和 Context 事件。非交互 `run` 自动输出诊断，定位超时、重复失败、用量缺口和最慢调用。独立验证结果可通过同一运行的 sidecar 加入报告。[诊断口径](docs/harness-evaluation.md#自动-trace-诊断)
+- **执行与权限** · 循环跟踪步骤、Token、工具调用和墙钟预算。工具在执行前校验参数和权限，支持逐次审批和 Docker 隔离。
+- **会话与上下文** · 支持恢复、取消和分叉，可配置历史窗口、摘要和仓库检索。原始会话记录用于恢复，选定的上下文策略决定模型每步看到的内容。
+- **扩展与验证** · 模型、工具和运行服务通过显式接口组装。可配置 Skills、完成前验证和可选的 Project Memory。
+- **Trace 与诊断** · 记录模型、工具、权限和 Context 事件。非交互 `run` 自动输出诊断，定位超时、重复失败、用量缺口和最慢调用。独立验证结果可通过同一运行的 sidecar 加入报告。
 
 ## 查看一次运行
 
@@ -41,7 +41,7 @@ uv run myagentrun trace replay /path/to/run.jsonl
 
 ## 开发
 
-源码位于 [`src/myagentrun/`](src/myagentrun/)，示例位于 [`examples/`](examples/)。架构与开发约束见 [ADR](docs/adr/README.md) 和 [AGENTS.md](AGENTS.md)，评测工具的使用方式见 [Benchmark 指南](docs/benchmark.md)。
+源码位于 [`src/myagentrun/`](src/myagentrun/)，示例位于 [`examples/`](examples/)。架构、开发约束与评测口径见 [AGENTS.md](AGENTS.md)。
 
 ```bash
 uv sync --locked --all-groups
