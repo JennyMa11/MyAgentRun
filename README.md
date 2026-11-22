@@ -14,7 +14,7 @@ MyAgentRun 是一个供自己在终端使用的 **Coding Agent Harness / Runtime
 
 - 版本：`0.3.2`（Apache-2.0）；本页能力与评测说明更新至 2026-10-28。
 - 技术基线：Python `>=3.12`、`uv`、`src/` 布局；运行依赖包括 `pydantic`、流式 HTTP 的 `httpx` 和终端输入的 `prompt_toolkit`，MLX、MCP 与 Phoenix 可观测性为可选依赖。
-- 规模：109 个源码模块、62 个测试模块、1066 个测试、35 个 Benchmark 任务（`core` 25 + `repo` 6 + `hard` 4）。测试数量由完整 pytest 收集核对，不代表功能验收充分。
+- 规模：110 个源码模块、63 个测试模块、1070 个测试、35 个 Benchmark 任务（`core` 25 + `repo` 6 + `hard` 4）。测试数量由完整 pytest 收集核对，不代表功能验收充分。
 
 轻量 DSH 扩展现已提供可取消的 OpenAI-compatible 流式输出、逐次审批、稳定会话及历史分叉、
 配置驱动的 Python 插件组合、受控执行钩子和统一 local/Docker 文件与进程后端。
@@ -736,9 +736,11 @@ uv run myagentrun harness-study run --credentials-file .env.deepseek
 `--sources` 与 `--output`；Harness study 使用 `--image-lock`、`--sources` 和 `--output-dir`
 指定对应的镜像锁、输入与新输出。v1 已完成采样的目录不可续跑或覆盖。
 
-### 离线回放、指标与重评分
+### 自动诊断、离线回放与重评分
 
 ```bash
+uv run myagentrun trace analyze /path/to/trace.jsonl
+uv run myagentrun trace analyze /path/to/trace.jsonl --evidence /path/to/evidence.json
 uv run myagentrun trace replay /path/to/trace.jsonl
 uv run myagentrun trace diff /path/to/a.jsonl /path/to/b.jsonl \
   --left-label baseline --right-label variant
@@ -749,6 +751,11 @@ uv run myagentrun harness-study rescore \
   --output-dir benchmark-results/harness-study/v1 \
   --rescore-output benchmark-results/harness-study/rescored-new
 ```
+
+`myagentrun run` 结束后会在命令的 JSON 输出中附上 `diagnostics`。
+`trace analyze` 可以离线重算同一份报告，也可用 `--run-id` 选择多运行 Trace 中的一条运行。
+报告提供工具超时、重复失败、自动重试、Token 用量缺口、Context 增长和最耗时调用的定位。
+报告口径、证据索引与覆盖范围见[自动 Trace 诊断](docs/harness-evaluation.md#自动-trace-诊断)。
 
 无 sidecar 的指标只包含 Trace 可支持的检查；sidecar 提供独立语义判据，不能只写一个自报标签。
 重评分校验冻结事实与源报告哈希，生成新视图，不产生新模型证据。

@@ -71,6 +71,7 @@ from myagentrun.evaluation import (
     diff_traces,
     pareto,
 )
+from myagentrun.evaluation.diagnostics import analyze_trace
 from myagentrun.evaluation.diff import to_markdown as diff_markdown
 from myagentrun.evaluation.harness_metrics import ScoringEvidence, score_harness
 from myagentrun.evaluation.inference import inference_from_trace
@@ -216,7 +217,7 @@ def _build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915 - CLI command d
     report.add_argument("path", type=Path, help="a benchmark or ablation JSON report")
     report.add_argument("--markdown", type=Path, help="write Markdown here instead of stdout")
 
-    trace = subparsers.add_parser("trace", help="replay or diff recorded JSONL traces")
+    trace = subparsers.add_parser("trace", help="analyze, replay or diff recorded JSONL traces")
     trace_commands = trace.add_subparsers(dest="trace_command", required=True)
     trace_replay = trace_commands.add_parser("replay", help="reconstruct a run step by step")
     trace_replay.add_argument("path", type=Path)
@@ -229,6 +230,12 @@ def _build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915 - CLI command d
     trace_metrics.add_argument("path", type=Path)
     trace_metrics.add_argument("--run-id", help="select one run from a trace")
     trace_metrics.add_argument(
+        "--evidence", type=Path, help="independent run-bound scoring sidecar"
+    )
+    trace_analyze = trace_commands.add_parser("analyze", help="diagnose a saved JSONL trace")
+    trace_analyze.add_argument("path", type=Path)
+    trace_analyze.add_argument("--run-id", help="select one run from a trace")
+    trace_analyze.add_argument(
         "--evidence", type=Path, help="independent run-bound scoring sidecar"
     )
     trace_diff = trace_commands.add_parser("diff", help="compare two traces of the same task")
@@ -857,7 +864,7 @@ async def _run(args: argparse.Namespace) -> int:
             diff_text = raw_stdout
     if runtime.close is not None:
         await runtime.close()
-    inference = inference_from_trace(TraceRun.from_file(trace_path))
+    trace = TraceRun.from_file(trace_path, run_id=result.run_id)
     output = {
         "answer": result.answer,
         "cost_usd": result.cost_usd,
@@ -865,7 +872,8 @@ async def _run(args: argparse.Namespace) -> int:
         "duration_ms": round(result.duration_ms, 3),
         "failure_reason": result.failure_reason,
         "latency": result.latency.to_json(),
-        "inference": inference,
+        "inference": inference_from_trace(trace),
+        "diagnostics": analyze_trace(trace),
         "model": selection.describe(),
         "model_load_ms": model_load_ms,
         "run_id": result.run_id,
@@ -1480,6 +1488,14 @@ def _trace_diff(args: argparse.Namespace) -> int:
     return 0
 
 
+def _trace_analyze(args: argparse.Namespace) -> int:
+    trace = TraceRun.from_file(args.path, run_id=args.run_id)
+    evidence = ScoringEvidence.from_file(args.evidence) if args.evidence else None
+    report = analyze_trace(trace, evidence=evidence)
+    sys.stdout.write(f"{json.dumps(report, indent=2, sort_keys=True)}\n")
+    return 0
+
+
 def _trace_metrics(args: argparse.Namespace) -> int:
     trace = TraceRun.from_file(Path(args.path), run_id=args.run_id)
     evidence = ScoringEvidence.from_file(args.evidence) if args.evidence else None
@@ -1837,6 +1853,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 "replay": _trace_replay,
                 "diff": _trace_diff,
                 "metrics": _trace_metrics,
+                "analyze": _trace_analyze,
             }
             exit_code = trace_handlers[args.trace_command](args)
         else:

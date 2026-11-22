@@ -114,7 +114,17 @@ def test_explicit_scripted_provider_overrides_environment_model_profile(
         main(argv)
     assert exit_info.value.code == 0
     if command == "run":
-        assert "offline answer" in capsys.readouterr().out
+        output = json.loads(capsys.readouterr().out)
+        assert output["answer"] == "offline answer"
+        trace = Path(output["trace"])
+        original = trace.read_bytes()
+        with pytest.raises(SystemExit) as diagnostic_exit:
+            main(["trace", "analyze", str(trace)])
+        assert diagnostic_exit.value.code == 0
+        assert output["diagnostics"] == json.loads(capsys.readouterr().out)
+        assert output["diagnostics"]["outcome"]["verified_success"] is None
+        assert output["diagnostics"]["metrics"]["measurements"]["tool_calls"] == 0
+        assert trace.read_bytes() == original
 
 
 def test_scripted_provider_rejects_conflicting_explicit_profile(
@@ -196,6 +206,24 @@ def _write_trace(path: Path, *, tool: str, context_tokens: int) -> None:
         },
     ]
     path.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+
+
+def test_trace_analyze_reads_independent_evidence(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    trace = tmp_path / "run.jsonl"
+    _write_trace(trace, tool="read_file", context_tokens=100)
+    evidence = tmp_path / "evidence.json"
+    evidence.write_text(
+        '{"run_id":"r1","source":"held-out test","task_success":false}', encoding="utf-8"
+    )
+    with pytest.raises(SystemExit) as exit_info:
+        main(["trace", "analyze", str(trace), "--evidence", str(evidence)])
+    assert exit_info.value.code == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["outcome"] == {"loop_status": "finished", "verified_success": False}
+    assert report["metrics"]["evidence_source"] == "held-out test"
+    assert report["findings"][0]["code"] == "finished_verification_failed"
 
 
 def test_trace_replay_renders_every_stage(

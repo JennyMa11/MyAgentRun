@@ -15,7 +15,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
 
-from myagentrun.domain import JsonValue
+from myagentrun.domain import REDACTED, JsonValue
 from myagentrun.evaluation.tracefile import TraceRecord, TraceRun
 
 type Checks = dict[Annotated[str, Field(min_length=1)], StrictBool | None]
@@ -138,7 +138,10 @@ def _integer(value: JsonValue) -> int | None:
     return value if type(value) is int and value >= 0 else None
 
 
-def _tool_error(record: TraceRecord) -> bool:
+def is_tool_execution_error(record: TraceRecord) -> bool:
+    """Identify failed execution, including a recorded nonzero exit code."""
+    if _status(record) not in _EXECUTED:
+        return False
     if _status(record) in {"failed", "timed_out"}:
         return True
     result = record.data.get("result")
@@ -154,26 +157,38 @@ def _status(record: TraceRecord) -> str:
     return value if isinstance(value, str) else "unknown"
 
 
-def _repetition(trace: TraceRun, calls: tuple[TraceRecord, ...]) -> MetricRate:
-    arguments: dict[str, JsonValue] = {}
+def repeated_failed_actions(
+    trace: TraceRun,
+) -> tuple[MetricRate, tuple[TraceRecord, ...]]:
+    """Return the established repetition rate and the matching observations."""
+    calls = trace.by_name("tool_call_completed")
+    arguments: dict[tuple[int, str], JsonValue] = {}
     for record in trace.records:
         if record.name == "tool_call_started":
-            arguments[str(record.data.get("call_id"))] = record.data.get("arguments")
+            call_id = record.data.get("call_id")
+            if isinstance(call_id, str) and call_id:
+                arguments[record.step_id, call_id] = record.data.get("arguments")
         elif record.name == "model_call_completed":
             proposed = record.data.get("tool_calls")
             if isinstance(proposed, list):
                 for proposal in proposed:
                     if isinstance(proposal, dict):
-                        arguments[str(proposal.get("call_id"))] = proposal.get("arguments")
+                        call_id = proposal.get("call_id")
+                        if isinstance(call_id, str) and call_id:
+                            arguments.setdefault(
+                                (record.step_id, call_id), proposal.get("arguments")
+                            )
     previous: str | None = None
-    repeats = measured = 0
+    repeats: list[TraceRecord] = []
+    measured = 0
     for call in calls:
-        args = arguments.get(str(call.data.get("call_id")))
-        if args is None or _status(call) not in _STATUSES:
+        call_id = call.data.get("call_id")
+        args = arguments.get((call.step_id, call_id)) if isinstance(call_id, str) else None
+        if args is None or REDACTED in json.dumps(args) or _status(call) not in _STATUSES:
             previous = None
             continue
         measured += 1
-        if not _tool_error(call) and _status(call) not in {"invalid", "denied"}:
+        if not is_tool_execution_error(call) and _status(call) not in {"invalid", "denied"}:
             previous = None
             continue
         error = call.data.get("error")
@@ -189,9 +204,10 @@ def _repetition(trace: TraceRun, calls: tuple[TraceRecord, ...]) -> MetricRate:
             sort_keys=True,
             separators=(",", ":"),
         )
-        repeats += signature == previous
+        if signature == previous:
+            repeats.append(call)
         previous = signature
-    return MetricRate(repeats, measured, len(calls))
+    return MetricRate(len(repeats), measured, len(calls)), tuple(repeats)
 
 
 def _usage(trace: TraceRun) -> tuple[dict[str, JsonValue], dict[str, MetricRate]]:
@@ -312,7 +328,9 @@ def score_harness(trace: TraceRun, *, evidence: ScoringEvidence | None = None) -
     rates.update(
         {
             "tool_error_rate": MetricRate(
-                sum(_tool_error(call) for call in executed), len(executed), len(executed)
+                sum(is_tool_execution_error(call) for call in executed),
+                len(executed),
+                len(executed),
             ),
             "invalid_tool_call_rate": MetricRate(
                 sum(call.data.get("status") == "invalid" for call in known), len(known), len(calls)
@@ -320,12 +338,15 @@ def score_harness(trace: TraceRun, *, evidence: ScoringEvidence | None = None) -
             "permission_denied_rate": MetricRate(
                 sum(call.data.get("status") == "denied" for call in known), len(known), len(calls)
             ),
-            "repeated_failed_action_rate": _repetition(trace, calls),
+            "repeated_failed_action_rate": repeated_failed_actions(trace)[0],
         }
     )
     retried = [call for call in calls if (_integer(call.data.get("attempt")) or 0) > 1]
     rates["retry_recovery_rate"] = MetricRate(
-        sum(call.data.get("status") == "succeeded" and not _tool_error(call) for call in retried),
+        sum(
+            call.data.get("status") == "succeeded" and not is_tool_execution_error(call)
+            for call in retried
+        ),
         len(retried),
         len(retried),
     )
