@@ -74,3 +74,28 @@ def test_failed_subcommand_cannot_be_treated_as_a_successful_experiment(
     monkeypatch.setattr(offline.subprocess, "run", failed_run)
     with pytest.raises(offline.RegressionError, match="failed; inspect"):
         offline.run_command(["test-command"], tmp_path, "experiment")
+
+
+def test_report_does_not_claim_an_archive_comparison_that_did_not_happen(
+    tmp_path: Path,
+) -> None:
+    metadata = {
+        "git_head": "0" * 40,
+        "dirty_workspace": False,
+        "source_sha256": "0" * 64,
+    }
+    summary = {
+        "groups": [],
+        "total_task_runs": 0,
+        "repeated_task_pairs": 0,
+        "journal_paired_tasks": 0,
+        "median_journal_harness_delta_ms": 0.0,
+        "archive_compared": False,
+    }
+    offline.emit_report(tmp_path, metadata, summary)
+    report = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "未与历史归档比对" in report
+    assert "确定性指标与历史归档一致" not in report
+    summary["archive_compared"] = True
+    offline.emit_report(tmp_path, metadata, summary)
+    assert "确定性指标与历史归档一致" in (tmp_path / "report.md").read_text(encoding="utf-8")

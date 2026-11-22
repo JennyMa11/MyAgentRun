@@ -329,7 +329,11 @@ def check_archive(
 
 def audit(output: Path, metadata: dict[str, Any]) -> dict[str, Any]:
     """Fail closed on criteria, repeat metrics, journal pairing or Trace replay drift."""
-    archive = load_json(PROJECT / "docs/results/summary.json")
+    archive_path = PROJECT / "docs/results/summary.json"
+    # The archived report is author-only material that is not published with the
+    # repository, so a fresh clone cannot compare against it.  Skip that one
+    # comparison and say so in the summary instead of inventing an archive.
+    archive = load_json(archive_path) if archive_path.is_file() else None
     groups = []
     all_results = []
     repeated_tasks = 0
@@ -352,9 +356,13 @@ def audit(output: Path, metadata: dict[str, Any]) -> dict[str, Any]:
             if count != command["task_count"]:
                 raise RegressionError("missing tasks in experiment report")
             repeated_tasks += count
-            check_archive(
-                command["name"], variant["configuration"]["name"], variant["aggregate"], archive
-            )
+            if archive is not None:
+                check_archive(
+                    command["name"],
+                    variant["configuration"]["name"],
+                    variant["aggregate"],
+                    archive,
+                )
             groups.append(
                 {
                     "experiment": command["name"],
@@ -388,6 +396,7 @@ def audit(output: Path, metadata: dict[str, Any]) -> dict[str, Any]:
             pair["harness_delta_ms"] for pair in pairs
         ),
         "repeat_metric_mismatches": [],
+        "archive_compared": archive is not None,
         "archived_metric_mismatches": [],
         "trace_replay_mismatches": [],
         "journal_stable_metric_mismatches": 0,
@@ -417,13 +426,18 @@ def emit_report(output: Path, metadata: dict[str, Any], summary: dict[str, Any])
             f"| {group['experiment']} | {group['variant']} | {value['runs']} | "
             f"{value['success_rate']:.0%} | {value['average_tokens']:,.2f} |"
         )
+    archive_note = (
+        "确定性指标与历史归档一致。"
+        if summary["archive_compared"]
+        else "本次未与历史归档比对：`docs/results/summary.json` 不在仓库内。"
+    )
     lines += [
         "",
         f"共 {summary['total_task_runs']} 次判据通过；"
         f"{summary['repeated_task_pairs']} 对重复任务确定性指标一致。",
         f"Session 对照 {summary['journal_paired_tasks']} 对，确定性指标一致；"
         f"Harness 配对耗时增量中位数 {summary['median_journal_harness_delta_ms']:.3f} ms。",
-        "全部 Trace 回放终态、Token、模拟成本与报告一致；确定性指标与历史归档一致。",
+        f"全部 Trace 回放终态、Token、模拟成本与报告一致；{archive_note}",
         "",
         "复现命令：",
         "",
